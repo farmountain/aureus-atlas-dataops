@@ -1,0 +1,112 @@
+{
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "environment": "dev",
+  "events": [
+    {
+      "id": "1737802200000-abc123",
+      "timestamp": "2024-01-15T10:30:00.000Z",
+      "actor": "analyst-1",
+      "role": "analyst",
+      "action": "query_execute",
+      "environment": "dev",
+      "decision": {
+        "allow": true,
+        "requiresApproval": false,
+        "reason": "All policies passed",
+        "policyId": "prod-write-admin-only",
+        "policyName": "Production Write - Admin Only"
+      },
+      "snapshotId": "1737802200000-snap001",
+      "metadata": {
+        "tokenCostEstimate": 500,
+        "queryCostEstimate": 5
+      }
+    },
+    {
+      "id": "1737802201000-def456",
+      "timestamp": "2024-01-15T10:30:01.000Z",
+      "actor": "admin-1",
+      "role": "admin",
+      "action": "dataset_create",
+      "environment": "dev",
+      "decision": {
+        "allow": true,
+        "requiresApproval": false,
+        "reason": "All policies passed",
+        "policyId": "prod-write-admin-only",
+        "policyName": "Production Write - Admin Only"
+      },
+      "snapshotId": "1737802201000-snap002",
+      "metadata": {
+        "domain": "credit_risk",
+        "tokenCostEstimate": 100,
+        "queryCostEstimate": 1
+      }
+    },
+    {
+      "id": "1737802202000-ghi789",
+      "timestamp": "2024-01-15T10:30:02.000Z",
+      "actor": "analyst-2",
+      "role": "analyst",
+      "action": "dataset_delete",
+      "environment": "prod",
+      "decision": {
+        "allow": false,
+        "requiresApproval": false,
+        "reason": "Production writes require admin role or approver review",
+        "policyId": "prod-write-admin-only",
+        "policyName": "Production Write - Admin Only"
+      },
+      "metadata": {
+        "tokenCostEstimate": 50,
+        "queryCostEstimate": 1
+      }
+    },
+    {
+      "id": "1737802203000-jkl012",
+      "timestamp": "2024-01-15T10:30:03.000Z",
+      "actor": "viewer-1",
+      "role": "viewer",
+      "action": "query_execute",
+      "environment": "dev",
+      "decision": {
+        "allow": false,
+        "requiresApproval": false,
+        "reason": "Viewers cannot access multi-jurisdiction data",
+        "policyId": "cross-jurisdiction-restricted",
+        "policyName": "Cross Jurisdiction Restricted"
+      },
+      "metadata": {
+        "jurisdiction": "multi",
+        "tokenCostEstimate": 200,
+        "queryCostEstimate": 2
+      }
+    },
+    {
+      "id": "1737802204000-mno345",
+      "timestamp": "2024-01-15T10:30:04.000Z",
+      "actor": "analyst-3",
+      "role": "analyst",
+      "action": "query_execute",
+      "environment": "dev",
+      "decision": {
+        "allow": false,
+        "requiresApproval": true,
+        "reason": "High PII access requires approval",
+        "policyId": "high-pii-approval-required",
+        "policyName": "High PII - Approval Required"
+      },
+      "metadata": {
+        "piiLevel": "high",
+        "tokenCostEstimate": 300,
+        "queryCostEstimate": 3
+      }
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "success": 2,
+    "blocked": 2,
+    "requiresApproval": 1
+  }
+}

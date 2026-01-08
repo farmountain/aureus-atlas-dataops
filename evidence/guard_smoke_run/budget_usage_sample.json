@@ -1,0 +1,16 @@
+{
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "environment": "dev",
+  "limits": {
+    "tokenBudget": 10000,
+    "queryCostBudget": 100
+  },
+  "usage": {
+    "tokensUsed": 600,
+    "queryCostUsed": 6
+  },
+  "utilization": {
+    "tokens": "6.00%",
+    "queryCost": "6.00%"
+  }
+}

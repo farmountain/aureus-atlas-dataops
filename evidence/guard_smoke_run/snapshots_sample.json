@@ -1,0 +1,47 @@
+{
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "environment": "dev",
+  "snapshots": [
+    {
+      "id": "1737802200000-snap001",
+      "timestamp": "2024-01-15T10:30:00.000Z",
+      "actor": "analyst-1",
+      "action": "query_execute",
+      "environment": "dev",
+      "state": {
+        "metadata": {
+          "tokenCostEstimate": 500,
+          "queryCostEstimate": 5
+        },
+        "specs": {
+          "testCase": "Analyst queries in dev"
+        }
+      }
+    },
+    {
+      "id": "1737802201000-snap002",
+      "timestamp": "2024-01-15T10:30:01.000Z",
+      "actor": "admin-1",
+      "action": "dataset_create",
+      "environment": "dev",
+      "state": {
+        "metadata": {
+          "domain": "credit_risk",
+          "tokenCostEstimate": 100,
+          "queryCostEstimate": 1
+        },
+        "specs": {
+          "testCase": "Admin creates dataset in dev"
+        }
+      },
+      "parentSnapshotId": "1737802200000-snap001"
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "byAction": {
+      "query_execute": 1,
+      "dataset_create": 1
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "environment": "dev",
+  "state": "completed",
+  "config": {
+    "environment": "dev",
+    "budgetLimits": {
+      "tokenBudget": 10000,
+      "queryCostBudget": 100
+    },
+    "enableAudit": true,
+    "enableSnapshots": true
+  },
+  "statistics": {
+    "auditEvents": 5,
+    "snapshots": 2,
+    "budgetUsage": {
+      "tokensUsed": 600,
+      "queryCostUsed": 6
+    }
+  },
+  "policyEvaluation": {
+    "totalEvaluations": 5,
+    "allowed": 2,
+    "blocked": 2,
+    "requiresApproval": 1
+  },
+  "guardDecisions": [
+    {
+      "decision": "ALLOW",
+      "reason": "Analyst in dev environment with low PII",
+      "action": "query_execute"
+    },
+    {
+      "decision": "ALLOW",
+      "reason": "Admin role with sufficient privileges",
+      "action": "dataset_create"
+    },
+    {
+      "decision": "BLOCK",
+      "reason": "Analyst cannot write to production",
+      "action": "dataset_delete"
+    },
+    {
+      "decision": "BLOCK",
+      "reason": "Viewer cannot access multi-jurisdiction data",
+      "action": "query_execute"
+    },
+    {
+      "decision": "APPROVAL_REQUIRED",
+      "reason": "High PII requires approval for analysts",
+      "action": "query_execute"
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useKV } from '@github/spark/hooks';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MagnifyingGlass, Database, GitBranch, CheckCircle } from '@phosphor-icons/react';
+import { MagnifyingGlass, Database, GitBranch, CheckCircle, Shield } from '@phosphor-icons/react';
 import { QueryView } from './QueryView';
 import { DatasetsView } from './DatasetsView';
 import { PipelinesView } from './PipelinesView';
 import { ApprovalsView } from './ApprovalsView';
+import { GuardDemo } from './GuardDemo';
 import type { Dataset, ApprovalRequest, QueryResult, PipelineSpec } from '@/lib/types';
 import { SAMPLE_DATASETS, SAMPLE_APPROVALS } from '@/lib/mockData';
 
@@ -43,7 +44,7 @@ export default function App() {
 
       <div className="container mx-auto px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-4 mb-8">
+          <TabsList className="grid w-full max-w-3xl grid-cols-5 mb-8">
             <TabsTrigger value="query" className="gap-2">
               <MagnifyingGlass weight="fill" className="h-4 w-4" />
               Ask
@@ -64,6 +65,10 @@ export default function App() {
                   {pendingApprovals.length}
                 </span>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="guard" className="gap-2">
+              <Shield weight="fill" className="h-4 w-4" />
+              Guard
             </TabsTrigger>
           </TabsList>
 
@@ -89,6 +94,10 @@ export default function App() {
 
           <TabsContent value="approvals" className="mt-0">
             <ApprovalsView approvals={approvals || []} />
+          </TabsContent>
+
+          <TabsContent value="guard" className="mt-0">
+            <GuardDemo />
           </TabsContent>
         </Tabs>
       </div>
