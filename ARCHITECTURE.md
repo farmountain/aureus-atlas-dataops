@@ -128,28 +128,74 @@ Before any deployment/modification:
 
 ### 3. Query Service
 
+**Status**: ✅ **MVP COMPLETE** (`src/lib/query-service.ts`, `src/lib/postgres-sandbox.ts`)
+
+**Implementation**:
+- POST /query/ask endpoint that accepts natural language questions
+- Canonical intent JSON generation (measures, dimensions, filters, time range, aggregation, orderBy, limit)
+- Simple SQL generation (SELECT-only, validated against prohibited keywords)
+- Policy checks for PII level and cross-jurisdiction scenarios
+- Citations with dataset IDs, names, domains, and columns used
+- Freshness check results with staleness detection
+- Sandboxed query execution against mock Postgres demo schema
+- Result sanity checks: row count limits (max 10K), null rate validation, control totals
+- Query lineage recording (query → datasets mapping)
+- NO direct free-text SQL execution from users
+- Comprehensive test coverage with unit tests and smoke tests
+- Evidence generation under `/evidence/query_runs/{queryId}/`
+
 **Flow**:
 ```
 NL Question
-  → Intent Schema Extraction (LLM)
-  → Required Dataset Identification
-  → Policy Check (PII, jurisdiction, access)
-  → SQL Generation (LLM with schema context)
-  → SQL Validation (parse + sandbox check)
-  → Execution (read-only, timeout limits)
-  → Result Formatting + Lineage
+  → LLM Intent Parsing (measures, dimensions, filters, time ranges, aggregation)
+  → Dataset Selection (from metadata catalog via domain or field matching)
+  → Policy Check (PII level, jurisdiction, freshness SLA)
+  → SQL Generation (SELECT-only, validated, parameterized)
+  → SQL Validation (no INSERT/UPDATE/DELETE/DROP/etc.)
+  → Sandbox Execution (mock Postgres with row limits)
+  → Sanity Checks (row count, null rates, control totals)
+  → Result Formatting + Metadata
+  → Lineage Recording (query → datasets)
   → Evidence Pack Generation
+```
+
+**API Methods**:
+- `ask(request: QueryAskRequest)` - Main endpoint, returns QueryAskResponse
+- `getLineage(lineageId: string)` - Retrieve lineage record by ID
+- `getAllLineage()` - Retrieve all lineage records
+
+**QueryAskResponse Structure**:
+```typescript
+{
+  queryId: string
+  intent: QueryIntent              // measures, dimensions, filters, timeRange, aggregation, orderBy, limit
+  sql: string                      // Generated SELECT query
+  policyChecks: PolicyCheck[]      // PII/jurisdiction/freshness policy results
+  citations: Citation[]            // Dataset IDs, names, domains, columnsUsed
+  freshnessChecks: FreshnessCheck[] // Staleness status per dataset
+  results?: Array<Record<string, unknown>> // Query results (optional)
+  resultMetadata?: {
+    rowCount: number
+    executionTimeMs: number
+    nullRateByColumn: Record<string, number>
+    controlTotals?: Record<string, number>
+  }
+  lineageId: string                // Reference to lineage record
+  timestamp: string
+}
 ```
 
 **Intent Schema**:
 ```typescript
 {
-  question: string
-  requiredDomains: string[]
-  requiredDatasets: string[]
-  containsPII: boolean
-  crossJurisdiction: boolean
-  aggregationType: "summary" | "detail" | "timeseries"
+  question: string                 // Clarified question
+  measures: string[]               // Numeric fields to calculate (amount, count, balance, etc.)
+  dimensions: string[]             // Categorical fields to group by (region, product, status, etc.)
+  filters: Array<{field, operator, value}> // WHERE clause conditions
+  timeRange?: {start, end}         // Date range if applicable
+  aggregation?: "sum" | "avg" | "count" | "min" | "max"
+  orderBy?: {field, direction}     // Sorting preference
+  limit?: number                   // Row limit (default 1000, max 10000)
 }
 ```
 
