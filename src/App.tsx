@@ -1,5 +1,13 @@
+import MainApp from './components/views/MainApp';
+import { Toaster } from '@/components/ui/sonner';
+
 function App() {
-    return <div></div>
+  return (
+    <>
+      <MainApp />
+      <Toaster />
+    </>
+  );
 }
 
-export default App
+export default App;
