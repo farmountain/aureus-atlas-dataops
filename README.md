@@ -9,6 +9,7 @@ AUREUS is a **frontend demonstration** of a comprehensive governed data platform
 - **Natural Language Queries**: Ask data questions in plain English, get SQL + results + evidence
 - **Dataset Onboarding**: LLM-assisted data contract generation with governance checks
 - **Pipeline Generation**: Transform data with auto-generated SQL, tests, and DQ checks
+- **Config Copilot**: Natural language → structured specs (contracts, DQ rules, policies, SLAs)
 - **Approval Workflows**: Human-in-the-loop governance for high-risk operations
 
 ## Key Features
@@ -90,7 +91,24 @@ Try: "What is the total outstanding balance for high-risk loans?"
 - Each pipeline includes SQL, tests, and DQ checks
 - Requires approval for production deployment
 
-#### 4. Review Approvals (Approvals Tab)
+#### 4. Config Copilot (Config Tab) 🆕
+```
+Try: "I need a credit card transaction dataset with PII masking, 
+daily freshness, and fraud detection quality checks..."
+```
+- Describe data requirements in natural language
+- System generates complete specifications:
+  - Dataset Contract (schema, PII level, jurisdiction, SLA)
+  - DQ Rules (completeness, uniqueness, validity checks)
+  - Governance Policies (access control, masking, approvals)
+  - SLA Specifications (freshness, availability, quality targets)
+- Review generated specs with validation results
+- Commit to create versioned specs + snapshot + audit trail
+- All operations evidence-gated with full AUREUS guard integration
+
+**Sample Inputs**: See [examples/config_copilot_samples.md](./examples/config_copilot_samples.md) for 3 detailed examples
+
+#### 5. Review Approvals (Approvals Tab)
 - See pending approval requests with risk levels
 - Review complete evidence packs
 - Approve or reject with audit comments

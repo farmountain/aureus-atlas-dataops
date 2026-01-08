@@ -8,7 +8,7 @@ AUREUS is a bank-grade governed agentic data platform that enables business user
 
 ### 1. Complete Frontend Application
 A fully functional React/TypeScript application with:
-- **4 Primary Workflows**: Query (Ask), Datasets, Pipelines, Approvals
+- **5 Primary Workflows**: Query (Ask), Datasets, Pipelines, Config Copilot, Approvals
 - **Real LLM Integration**: Uses Spark's `spark.llm()` API for spec generation and SQL generation
 - **Persistent State**: All data stored using `useKV` hook (survives page refreshes)
 - **Professional Design**: Bank-appropriate theme with IBM Plex Sans typography
@@ -61,6 +61,37 @@ User Question
   - Unit tests with sample data
   - Data quality checks (completeness, uniqueness, validity)
   - Deployment manifest and rollback script
+
+#### Config Copilot (Config Tab) 🆕
+- **Natural Language → Structured Specs**: Describe data requirements in plain English
+- **Comprehensive Spec Generation**:
+  - Dataset Contract (schema, PII, jurisdiction, SLA, retention)
+  - DQ Rules (completeness, uniqueness, validity, consistency, timeliness)
+  - Governance Policies (access control, masking, approval workflows)
+  - SLA Specifications (freshness, availability, quality, latency targets)
+- **Full Validation**: JSON schema validation with detailed error/warning reporting
+- **AUREUS Guard Integration**: All commits go through policy check + audit + snapshot
+- **Evidence Generation**: Complete audit trail stored at `/evidence/config_copilot_runs/`
+- **Version Control**: All specs written to `/specs/{commitId}/` with metadata
+
+**Flow**:
+```
+NL Input ("I need a credit card transaction dataset...")
+  → LLM Spec Generation (4 parallel calls)
+  → Schema Validation (all 4 spec types)
+  → User Review (tabs for each spec type)
+  → Commit with Message
+  → Policy Check + Audit Event + Snapshot
+  → Files Written to /specs/
+  → Evidence Pack Generated
+  → Success Confirmation with IDs
+```
+
+**Example Output**:
+- Dataset Contract: Complete schema with 12+ fields, PII flags, retention policy
+- DQ Rules: 5-8 rules covering all required checks
+- Policies: 3-5 governance policies (access, masking, approval)
+- SLAs: Freshness, availability, quality targets with alerting
 
 #### Approval Workflows (Approvals Tab)
 - Review pending approval requests

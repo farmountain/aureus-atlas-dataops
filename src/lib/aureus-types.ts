@@ -14,7 +14,9 @@ export type ActionType =
   | 'policy_create'
   | 'policy_update'
   | 'approval_request'
-  | 'approval_grant';
+  | 'approval_grant'
+  | 'config.describe'
+  | 'config.commit';
 
 export interface ActionContext {
   actionType: ActionType;

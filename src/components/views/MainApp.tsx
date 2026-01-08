@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useKV } from '@github/spark/hooks';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MagnifyingGlass, Database, GitBranch, CheckCircle, Shield } from '@phosphor-icons/react';
+import { MagnifyingGlass, Database, GitBranch, CheckCircle, Shield, Sparkle } from '@phosphor-icons/react';
 import { QueryView } from './QueryView';
 import { DatasetsView } from './DatasetsView';
 import { PipelinesView } from './PipelinesView';
 import { ApprovalsView } from './ApprovalsView';
 import { GuardDemo } from './GuardDemo';
+import { ConfigCopilotView } from './ConfigCopilotView';
 import type { Dataset, ApprovalRequest, QueryResult, PipelineSpec } from '@/lib/types';
 import { SAMPLE_DATASETS, SAMPLE_APPROVALS } from '@/lib/mockData';
 
@@ -44,7 +45,7 @@ export default function App() {
 
       <div className="container mx-auto px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-3xl grid-cols-5 mb-8">
+          <TabsList className="grid w-full max-w-4xl grid-cols-6 mb-8">
             <TabsTrigger value="query" className="gap-2">
               <MagnifyingGlass weight="fill" className="h-4 w-4" />
               Ask
@@ -56,6 +57,10 @@ export default function App() {
             <TabsTrigger value="pipelines" className="gap-2">
               <GitBranch weight="fill" className="h-4 w-4" />
               Pipelines
+            </TabsTrigger>
+            <TabsTrigger value="config" className="gap-2">
+              <Sparkle weight="fill" className="h-4 w-4" />
+              Config
             </TabsTrigger>
             <TabsTrigger value="approvals" className="gap-2 relative">
               <CheckCircle weight="fill" className="h-4 w-4" />
@@ -90,6 +95,10 @@ export default function App() {
               pipelines={pipelines || []}
               setPipelines={setPipelines}
             />
+          </TabsContent>
+
+          <TabsContent value="config" className="mt-0">
+            <ConfigCopilotView />
           </TabsContent>
 
           <TabsContent value="approvals" className="mt-0">
