@@ -169,12 +169,34 @@ NL Question
 
 ### 5. Metadata Service
 
+**Status**: ✅ **MVP COMPLETE** (`src/lib/metadata-service.ts`)
+
+**Implementation**:
+- Full CRUD operations for datasets (id, name, domain, owner, pii_level, jurisdiction, freshness_sla, schema_ref)
+- Full CRUD operations for glossary terms with dataset linking capability
+- Classification rules engine that infers PII levels and jurisdiction from metadata
+- Policy decision engine that evaluates access based on pii_level, jurisdiction, and user role
+- Dataset "card" endpoint that returns: metadata + linked glossary + policies + freshness status
+- All write operations integrated with AUREUS Guard for policy enforcement
+- Automatic snapshot generation for all mutations (create, update, delete)
+- Comprehensive test coverage with unit tests and smoke tests
+- Evidence generation under `/evidence/metadata_smoke_run/`
+
 **Stores**:
 - Dataset registry (schema, lineage, ownership)
 - Glossary terms (business definitions)
+- Dataset-glossary term linkages
 - Classification tags (PII, confidential, public)
 - Freshness SLAs and actual refresh times
-- Usage analytics (query frequency, users)
+- Metadata snapshots for rollback capability
+
+**API Methods**:
+- `createDataset()`, `getDataset()`, `updateDataset()`, `deleteDataset()`, `listDatasets()`
+- `createGlossaryTerm()`, `getGlossaryTerm()`, `updateGlossaryTerm()`, `deleteGlossaryTerm()`, `listGlossaryTerms()`
+- `linkGlossaryToDataset()`, `unlinkGlossaryFromDataset()`, `getLinkedGlossaryTerms()`
+- `getClassificationRules()` - Returns PII/jurisdiction inference and policy decision logic
+- `getDatasetCard()` - Returns complete dataset card with metadata, glossary, policies, freshness
+- `getSnapshots()`, `getSnapshot()` - Retrieve metadata snapshots for audit/rollback
 
 ## Data Models
 

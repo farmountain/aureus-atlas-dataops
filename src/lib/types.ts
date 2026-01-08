@@ -154,3 +154,15 @@ export interface AuditEvent {
   policyResults: PolicyCheck[];
   evidenceRef?: string;
 }
+
+export interface GlossaryTerm {
+  id: string;
+  term: string;
+  definition: string;
+  domain: Domain;
+  relatedTerms?: string[];
+  linkedDatasets?: string[];
+  owner: string;
+  createdAt: string;
+  updatedAt: string;
+}
