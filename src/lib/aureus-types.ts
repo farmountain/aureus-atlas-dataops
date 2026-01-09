@@ -40,6 +40,7 @@ export interface PolicyDecision {
   policyName: string;
   tokenCostEstimate?: number;
   queryCostEstimate?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BudgetLimits {

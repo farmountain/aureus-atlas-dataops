@@ -4,6 +4,63 @@
 
 This threat model identifies security risks in a bank-grade governed agentic data platform and documents mitigations. While the current implementation is a frontend demonstration, this document addresses threats for the full production system.
 
+## STRIDE Threat Analysis
+
+### Spoofing Identity
+
+| ID | Threat | Impact | Mitigation | Detection |
+|----|--------|--------|------------|-----------|
+| S1 | Attacker impersonates legitimate user | HIGH | MFA, device fingerprinting, session tokens with rotation | Failed auth attempts, impossible travel |
+| S2 | Session token theft/replay | HIGH | Short-lived tokens (1h), token binding, secure cookies | Token reuse detection, concurrent sessions |
+| S3 | API key compromise | CRITICAL | Key rotation, key scope limits, vault storage | Unusual API patterns, geographic anomalies |
+| S4 | JWT forgery | CRITICAL | Strong signing keys (RS256), key rotation, validation | Invalid signature attempts |
+
+### Tampering
+
+| ID | Threat | Impact | Mitigation | Detection |
+|----|--------|--------|------------|-----------|
+| T1 | Audit log modification | CRITICAL | Append-only logs, cryptographic signatures, separate storage | Integrity check failures, sequence gaps |
+| T2 | Policy file tampering | CRITICAL | Git version control, signed commits, approval workflow | Unauthorized file changes |
+| T3 | Evidence pack falsification | HIGH | Cryptographic signatures, hash chains | Signature verification failures |
+| T4 | SQL injection in generated queries | CRITICAL | Parameterized queries, SQL validation, read-only user | Syntax errors, anomalous SQL patterns |
+| T5 | Dataset metadata corruption | MEDIUM | Schema validation, immutable snapshots, checksums | Validation failures, schema drift |
+
+### Repudiation
+
+| ID | Threat | Impact | Mitigation | Detection |
+|----|--------|--------|------------|-----------|
+| R1 | User denies performing action | MEDIUM | Immutable audit logs with digital signatures | N/A (prevention only) |
+| R2 | Approval workflow bypass claim | HIGH | Cryptographic approval signatures, multiple validators | Approval verification failures |
+| R3 | Query execution denial | LOW | Query log with user attribution, evidence packs | N/A (prevention only) |
+
+### Information Disclosure
+
+| ID | Threat | Impact | Mitigation | Detection |
+|----|--------|--------|------------|-----------|
+| I1 | Unauthorized PII access | CRITICAL | Role-based access, PII masking, approval workflows | Policy violation attempts |
+| I2 | Cross-border data leakage | CRITICAL | Jurisdiction tagging, policy enforcement | Cross-jurisdiction queries |
+| I3 | Query result exfiltration | HIGH | Result size limits, rate limiting, DLP scanning | Large exports, rapid queries |
+| I4 | Prompt injection reveals system prompts | MEDIUM | Input validation, prompt injection detection | Injection pattern matches |
+| I5 | Error messages leak sensitive info | MEDIUM | Generic error messages, detailed logs internal only | N/A (prevention only) |
+
+### Denial of Service
+
+| ID | Threat | Impact | Mitigation | Detection |
+|----|--------|--------|------------|-----------|
+| D1 | Query flooding | MEDIUM | Rate limiting (10 queries/min), query timeout | Abnormal request volumes |
+| D2 | Expensive query attacks | MEDIUM | Query cost estimation, budget limits, timeouts | Slow query logs |
+| D3 | Pipeline deployment spam | LOW | Rate limiting (3 deploys/min), approval gates | Rapid deployment attempts |
+| D4 | LLM token exhaustion | MEDIUM | Token budgets per user, cost estimation | Budget threshold alerts |
+
+### Elevation of Privilege
+
+| ID | Threat | Impact | Mitigation | Detection |
+|----|--------|--------|------------|-----------|
+| E1 | Privilege escalation via policy bypass | CRITICAL | Multiple policy layers, fail-secure defaults | Actions without policy checks |
+| E2 | Role manipulation | CRITICAL | External IdP for roles, approval for changes | Role change audit review |
+| E3 | Approval workflow circumvention | HIGH | Cryptographic approvals, separation of duties | Actions without approval records |
+| E4 | Prod access via dev credentials | HIGH | Environment-specific credentials, network isolation | Cross-environment access |
+
 ## Threat Categories
 
 ### 1. Authentication & Authorization Threats

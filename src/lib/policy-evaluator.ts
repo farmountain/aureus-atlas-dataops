@@ -1,5 +1,13 @@
 import type { UserRole, Domain, PIILevel } from './types';
 import type { ActionContext, PolicyDecision, Environment } from './aureus-types';
+import { 
+  evaluatePIIMaskingPolicy, 
+  evaluateCrossBorderPolicy, 
+  evaluatePurposeLimitationPolicy,
+  type EnhancedPolicyContext,
+  type Jurisdiction,
+  type PurposeTag 
+} from './security-policies';
 
 export interface PolicyRule {
   id: string;
@@ -154,6 +162,69 @@ const POLICY_RULES: PolicyRule[] = [
         tokenCostEstimate: tokenEstimate,
         queryCostEstimate: queryCostEstimate,
       };
+    },
+  },
+  {
+    id: 'pii-masking-enforcement',
+    name: 'PII Masking Enforcement',
+    description: 'Enforces PII masking levels based on user role and data classification',
+    evaluator: (context: ActionContext): PolicyDecision => {
+      const piiLevel = context.metadata.piiLevel as string;
+      const hasJustification = context.metadata.businessJustification as boolean || false;
+      
+      if (!piiLevel) {
+        return {
+          allow: true,
+          requiresApproval: false,
+          reason: 'No PII level specified',
+          policyId: 'pii-masking-enforcement',
+          policyName: 'PII Masking Enforcement',
+        };
+      }
+      
+      return evaluatePIIMaskingPolicy(piiLevel, context.role, hasJustification);
+    },
+  },
+  {
+    id: 'cross-border-enforcement',
+    name: 'Cross-Border Data Transfer Enforcement',
+    description: 'Enforces cross-border data transfer restrictions based on jurisdiction',
+    evaluator: (context: ActionContext): PolicyDecision => {
+      const sourceJurisdiction = context.metadata.sourceJurisdiction as Jurisdiction;
+      const targetJurisdiction = context.metadata.targetJurisdiction as Jurisdiction;
+      
+      if (!sourceJurisdiction || !targetJurisdiction) {
+        return {
+          allow: true,
+          requiresApproval: false,
+          reason: 'No cross-border transfer detected',
+          policyId: 'cross-border-enforcement',
+          policyName: 'Cross-Border Data Transfer Enforcement',
+        };
+      }
+      
+      return evaluateCrossBorderPolicy(sourceJurisdiction, targetJurisdiction, context.role);
+    },
+  },
+  {
+    id: 'purpose-limitation-enforcement',
+    name: 'Purpose Limitation Enforcement',
+    description: 'Enforces purpose limitation requirements for data access',
+    evaluator: (context: ActionContext): PolicyDecision => {
+      const purposeTag = context.metadata.purposeTag as PurposeTag | undefined;
+      const dataDomain = context.metadata.domain as string;
+      
+      if (!dataDomain) {
+        return {
+          allow: true,
+          requiresApproval: false,
+          reason: 'No data domain specified',
+          policyId: 'purpose-limitation-enforcement',
+          policyName: 'Purpose Limitation Enforcement',
+        };
+      }
+      
+      return evaluatePurposeLimitationPolicy(purposeTag, dataDomain, context.role);
     },
   },
 ];
