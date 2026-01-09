@@ -2,6 +2,7 @@ import type { Dataset, PolicyCheck, Domain } from './types';
 import { AureusGuard } from './aureus-guard';
 import type { ActionContext } from './aureus-types';
 import { PostgresSandbox } from './postgres-sandbox';
+import { queryRateLimiter } from './rate-limiter';
 
 export interface QueryIntent {
   question: string;
@@ -82,6 +83,12 @@ export class QueryService {
   }
 
   async ask(request: QueryAskRequest): Promise<QueryAskResponse> {
+    const rateLimitResult = await queryRateLimiter.checkLimit(request.actor);
+    
+    if (!rateLimitResult.allowed) {
+      throw new Error(rateLimitResult.reason || 'Rate limit exceeded');
+    }
+
     const queryId = this.generateId('query');
     const timestamp = new Date().toISOString();
 

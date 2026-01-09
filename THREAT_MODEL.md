@@ -39,7 +39,7 @@ This threat model identifies security risks in a bank-grade governed agentic dat
 |----|--------|--------|------------|-----------|
 | I1 | Unauthorized PII access | CRITICAL | Role-based access, PII masking, approval workflows | Policy violation attempts |
 | I2 | Cross-border data leakage | CRITICAL | Jurisdiction tagging, policy enforcement | Cross-jurisdiction queries |
-| I3 | Query result exfiltration | HIGH | Result size limits, rate limiting, DLP scanning | Large exports, rapid queries |
+| I3 | Query result exfiltration | HIGH | ✅ Result size limits, rate limiting (10/min implemented), DLP scanning | Large exports, rapid queries |
 | I4 | Prompt injection reveals system prompts | MEDIUM | Input validation, prompt injection detection | Injection pattern matches |
 | I5 | Error messages leak sensitive info | MEDIUM | Generic error messages, detailed logs internal only | N/A (prevention only) |
 
@@ -47,10 +47,10 @@ This threat model identifies security risks in a bank-grade governed agentic dat
 
 | ID | Threat | Impact | Mitigation | Detection |
 |----|--------|--------|------------|-----------|
-| D1 | Query flooding | MEDIUM | Rate limiting (10 queries/min), query timeout | Abnormal request volumes |
+| D1 | Query flooding | MEDIUM | ✅ Rate limiting implemented (10 queries/min), query timeout | Abnormal request volumes |
 | D2 | Expensive query attacks | MEDIUM | Query cost estimation, budget limits, timeouts | Slow query logs |
-| D3 | Pipeline deployment spam | LOW | Rate limiting (3 deploys/min), approval gates | Rapid deployment attempts |
-| D4 | LLM token exhaustion | MEDIUM | Token budgets per user, cost estimation | Budget threshold alerts |
+| D3 | Pipeline deployment spam | LOW | ✅ Rate limiting implemented (3 deploys/min), approval gates | Rapid deployment attempts |
+| D4 | LLM token exhaustion | MEDIUM | ✅ Token budgets per user, rate limiting, cost estimation | Budget threshold alerts |
 
 ### Elevation of Privilege
 
@@ -374,17 +374,31 @@ SELECT * FROM customer_pii WHERE 1=1"
 **Impact**: MEDIUM - Service unavailability
 
 **Mitigations**:
-- Rate limiting (per user, per IP)
-- Query timeout enforcement
-- Resource quotas per user
+- ✅ **Rate limiting implemented** (per user, sliding window)
+  - Query execution: 10 requests/60s per user
+  - Pipeline deployment: 3 requests/60s per user
+  - Config generation: 5 requests/60s per user
+  - PII access: 5 requests/60s per user
+  - Approval requests: 20 requests/60s per user
+- Query timeout enforcement (10s default)
+- Resource quotas per user (token budgets, query cost budgets)
+- Per-user isolation prevents cascade failures
 - Auto-scaling infrastructure
 - CDN for static assets
 - DDoS protection (CloudFlare, AWS Shield)
 
 **Detection**:
 - Abnormal request volumes
+- Rate limit hit monitoring
 - Resource exhaustion alerts
 - Slow query logs
+
+**Implementation Details**:
+- Rate limiter uses in-memory sliding window with cleanup
+- Rate limits enforced before policy checks to reduce load
+- Descriptive error messages returned to users
+- Independent state per user prevents one user blocking another
+- Evidence packs generated for rate limit violations
 
 #### T6.3: Dependency Vulnerabilities
 **Description**: Security vulnerabilities in third-party libraries.

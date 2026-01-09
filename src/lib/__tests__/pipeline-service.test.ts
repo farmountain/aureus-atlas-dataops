@@ -455,4 +455,126 @@ describe('PipelineService', () => {
       expect(generated.spec.dqChecks.length).toBeGreaterThan(0);
     });
   });
+
+  describe('Rate Limiting', () => {
+    it('should enforce rate limits on pipeline generation', async () => {
+      const actor = 'rate-limited-user';
+      const maxRequests = 3;
+      
+      const requests = [];
+      for (let i = 0; i < maxRequests + 2; i++) {
+        const request = {
+          name: `pipeline_${i}`,
+          description: 'Test pipeline',
+          sourceDatasetIds: ['ds-001'],
+          targetDatasetName: 'test_output',
+          transformRules: 'pass through',
+          domain: 'credit_risk',
+          actor,
+          role: 'analyst' as UserRole,
+        };
+        requests.push(pipelineService.generatePipeline(request));
+      }
+
+      const results = await Promise.allSettled(requests);
+      
+      const fulfilled = results.filter(r => r.status === 'fulfilled').length;
+      const rejected = results.filter(r => r.status === 'rejected').length;
+
+      expect(rejected).toBeGreaterThan(0);
+      expect(fulfilled).toBeLessThanOrEqual(maxRequests);
+    });
+
+    it('should enforce rate limits on pipeline deployment', async () => {
+      const actor = 'deploy-rate-limited';
+      const maxRequests = 3;
+
+      const request = {
+        name: 'test_pipeline',
+        description: 'Test pipeline',
+        sourceDatasetIds: ['ds-001'],
+        targetDatasetName: 'test_output',
+        transformRules: 'pass through',
+        domain: 'credit_risk',
+        actor: 'admin@bank.com',
+        role: 'admin' as UserRole,
+      };
+
+      const generated = await pipelineService.generatePipeline(request);
+
+      const deployments = [];
+      for (let i = 0; i < maxRequests + 2; i++) {
+        const deployRequest = {
+          pipelineId: `pipeline-${i}`,
+          stage: 'dev' as const,
+          actor,
+          role: 'admin' as UserRole,
+        };
+        deployments.push(pipelineService.deployPipeline(deployRequest, generated));
+      }
+
+      const results = await Promise.all(deployments);
+      
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success && r.error?.includes('Rate limit')).length;
+
+      expect(failed).toBeGreaterThan(0);
+      expect(successful).toBeLessThanOrEqual(maxRequests);
+    });
+
+    it('should isolate rate limits per user for pipeline operations', async () => {
+      const requests = [];
+      for (let i = 0; i < 5; i++) {
+        const request = {
+          name: `pipeline_${i}`,
+          description: 'Test pipeline',
+          sourceDatasetIds: ['ds-001'],
+          targetDatasetName: 'test_output',
+          transformRules: 'pass through',
+          domain: 'credit_risk',
+          actor: `user-${i}`,
+          role: 'analyst' as UserRole,
+        };
+        requests.push(pipelineService.generatePipeline(request));
+      }
+
+      const results = await Promise.allSettled(requests);
+      const fulfilled = results.filter(r => r.status === 'fulfilled');
+
+      expect(fulfilled.length).toBe(5);
+    });
+
+    it('should include rate limit details in deployment error', async () => {
+      const actor = 'deployment-limiter';
+      
+      const genRequest = {
+        name: 'test_pipeline',
+        description: 'Test pipeline',
+        sourceDatasetIds: ['ds-001'],
+        targetDatasetName: 'test_output',
+        transformRules: 'pass through',
+        domain: 'credit_risk',
+        actor: 'admin@bank.com',
+        role: 'admin' as UserRole,
+      };
+
+      const generated = await pipelineService.generatePipeline(genRequest);
+
+      for (let i = 0; i < 5; i++) {
+        const deployRequest = {
+          pipelineId: `pipeline-${i}`,
+          stage: 'dev' as const,
+          actor,
+          role: 'admin' as UserRole,
+        };
+        
+        const result = await pipelineService.deployPipeline(deployRequest, generated);
+        
+        if (i >= 3 && !result.success) {
+          expect(result.error).toContain('Rate limit');
+          break;
+        }
+      }
+    });
+  });
 });

@@ -410,4 +410,70 @@ describe('QueryService', () => {
       expect(allLineage.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  describe('Rate Limiting', () => {
+    it('should enforce rate limits on query execution', async () => {
+      const actor = 'rate-limited-user';
+      const maxRequests = 10;
+      
+      const requests = [];
+      for (let i = 0; i < maxRequests + 5; i++) {
+        requests.push(
+          service.ask({
+            question: `Query ${i}`,
+            domain: 'credit_risk',
+            actor,
+            role: 'analyst',
+          })
+        );
+      }
+
+      const results = await Promise.allSettled(requests);
+      
+      const fulfilled = results.filter(r => r.status === 'fulfilled').length;
+      const rejected = results.filter(r => r.status === 'rejected').length;
+
+      expect(rejected).toBeGreaterThan(0);
+      expect(fulfilled).toBeLessThanOrEqual(maxRequests);
+    });
+
+    it('should isolate rate limits per user', async () => {
+      const requests = [];
+      for (let i = 0; i < 5; i++) {
+        requests.push(
+          service.ask({
+            question: 'Query',
+            domain: 'credit_risk',
+            actor: `user-${i}`,
+            role: 'analyst',
+          })
+        );
+      }
+
+      const results = await Promise.allSettled(requests);
+      const fulfilled = results.filter(r => r.status === 'fulfilled');
+
+      expect(fulfilled.length).toBe(5);
+    });
+
+    it('should include rate limit details in error message', async () => {
+      const actor = 'rate-limit-test';
+      
+      for (let i = 0; i < 15; i++) {
+        try {
+          await service.ask({
+            question: `Query ${i}`,
+            domain: 'credit_risk',
+            actor,
+            role: 'analyst',
+          });
+        } catch (error) {
+          if (i >= 10) {
+            expect((error as Error).message).toContain('Rate limit');
+            break;
+          }
+        }
+      }
+    });
+  });
 });

@@ -235,6 +235,24 @@ Simulated OPA-style policy evaluation:
 
 ## Security Considerations
 
+### Rate Limiting ✅
+Implemented to prevent abuse and ensure fair resource usage:
+
+| Operation | Limit | Window | Purpose |
+|-----------|-------|--------|---------|
+| Query Execution | 10 requests | 60 seconds | Prevent query flooding, resource exhaustion |
+| Pipeline Deploy | 3 requests | 60 seconds | Prevent deployment spam, costly operations |
+| Config Generation | 5 requests | 60 seconds | Control LLM token usage |
+| PII Access | 5 requests | 60 seconds | Add friction to sensitive data access |
+| Approval Requests | 20 requests | 60 seconds | Prevent approval system abuse |
+
+**Features**:
+- Per-user isolation (one user cannot block another)
+- Sliding window algorithm with automatic cleanup
+- Descriptive error messages when limits exceeded
+- Rate limits enforced before policy checks for efficiency
+- Evidence generated for rate limit violations
+
 ### Authentication (Simulated)
 In production:
 - JWT tokens with role claims

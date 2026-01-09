@@ -1,6 +1,7 @@
 import { AureusGuard } from './aureus-guard';
 import type { ActionContext } from './aureus-types';
 import type { PipelineSpec, Dataset, TestSpec, DQCheck, EvidencePack, UserRole } from './types';
+import { pipelineRateLimiter } from './rate-limiter';
 
 export type DeploymentStage = 'dev' | 'uat' | 'prod';
 
@@ -59,6 +60,12 @@ export class PipelineService {
   }
 
   async generatePipeline(request: PipelineGenerationRequest): Promise<GeneratedPipeline> {
+    const rateLimitResult = await pipelineRateLimiter.checkLimit(request.actor);
+    
+    if (!rateLimitResult.allowed) {
+      throw new Error(rateLimitResult.reason || 'Rate limit exceeded for pipeline generation');
+    }
+
     console.log('[PipelineService] Generating pipeline:', request.name);
 
     const sourceDatasets = request.sourceDatasetIds
@@ -229,6 +236,15 @@ CROSS JOIN target_totals t;
   }
 
   async deployPipeline(request: DeploymentRequest, generated: GeneratedPipeline): Promise<DeploymentResult> {
+    const rateLimitResult = await pipelineRateLimiter.checkLimit(request.actor);
+    
+    if (!rateLimitResult.allowed) {
+      return {
+        success: false,
+        error: rateLimitResult.reason || 'Rate limit exceeded for pipeline deployment',
+      };
+    }
+
     console.log('[PipelineService] Deploying pipeline to', request.stage);
 
     const context: ActionContext = {
