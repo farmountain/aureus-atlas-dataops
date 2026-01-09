@@ -1,0 +1,77 @@
+{
+  "id": "pipeline_example_1234567890",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "deployment": {
+    "id": "deploy-1234567890",
+    "stage": "dev",
+    "pipelineId": "pipeline-001",
+    "actor": "analyst@bank.com",
+    "role": "analyst",
+    "approvalId": null
+  },
+  "generatedFiles": {
+    "sqlModel": "-- Model: customer_transaction_summary\n-- Description: Aggregate customer transactions by day\n-- Generated: 2024-01-15T10:30:00.000Z\n\nWITH source_data AS (\n  SELECT *\n  FROM customer_transactions\n),\n\ntransformed AS (\n  SELECT\n    transaction_id,\n    customer_id,\n    amount,\n    transaction_date,\n    status\n  FROM source_data\n  -- Transform rules: Group by customer and date, sum amounts\n)\n\nSELECT * FROM transformed;",
+    "schemaTest": "-- Schema/Contract Test for customer_transaction_summary\n-- Validates output schema matches expected contract\n\nSELECT \n  CASE \n    WHEN COUNT(*) = 5 THEN 'PASS'\n    ELSE 'FAIL'\n  END as schema_test_result\nFROM information_schema.columns\nWHERE table_name = 'customer_daily_summary'\n  AND column_name IN ('transaction_id', 'customer_id', 'amount', 'transaction_date', 'status');\n\n-- Expected columns: transaction_id, customer_id, amount, transaction_date, status",
+    "dqTests": [
+      "-- DQ Test: Completeness Check for customer_transaction_summary\nSELECT \n  'customer_daily_summary' as target,\n  COUNT(*) as total_rows,\n  SUM(CASE WHEN transaction_id IS NULL THEN 1 ELSE 0 END) as null_count,\n  (SUM(CASE WHEN transaction_id IS NULL THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) as null_percentage\nFROM customer_daily_summary\nHAVING null_percentage > 5.0; -- Threshold: 5%",
+      "-- DQ Test: Uniqueness Check for customer_transaction_summary\nSELECT \n  'customer_daily_summary' as target,\n  COUNT(*) as total_rows,\n  COUNT(DISTINCT transaction_id) as distinct_rows,\n  CASE \n    WHEN COUNT(*) = COUNT(DISTINCT transaction_id) THEN 'PASS'\n    ELSE 'FAIL'\n  END as uniqueness_test\nFROM customer_daily_summary;"
+    ],
+    "reconciliationTest": "-- Reconciliation/Control Totals Test for customer_transaction_summary\n-- Validates row counts and control totals between source and target\n\nWITH source_totals AS (\n  SELECT \n    COUNT(*) as source_count\n  FROM customer_transactions\n),\ntarget_totals AS (\n  SELECT \n    COUNT(*) as target_count\n  FROM customer_daily_summary\n)\nSELECT \n  s.source_count,\n  t.target_count,\n  t.target_count - s.source_count as difference,\n  CASE \n    WHEN ABS(t.target_count - s.source_count) <= s.source_count * 0.01 THEN 'PASS'\n    ELSE 'FAIL'\n  END as reconciliation_test\nFROM source_totals s\nCROSS JOIN target_totals t;\n\n-- Threshold: 1% variance allowed"
+  },
+  "testsList": [
+    "schema_contract_test",
+    "transaction_id_completeness",
+    "transaction_id_uniqueness",
+    "reconciliation_test"
+  ],
+  "guardDecisions": {
+    "auditEventId": "audit-1234567890-abc123",
+    "snapshotId": "snapshot-1234567890-xyz789",
+    "policyChecksPassed": true
+  },
+  "rollbackPlan": {
+    "snapshotId": "snapshot-1234567890-xyz789",
+    "stage": "dev",
+    "timestamp": "2024-01-15T10:30:00.000Z",
+    "steps": [
+      "Retrieve snapshot state from AUREUS guard",
+      "Restore pipeline specification to previous version",
+      "Restore SQL model files to previous version",
+      "Re-run validation tests on restored state",
+      "Update metadata service with restored pipeline state",
+      "Emit rollback audit event"
+    ]
+  },
+  "pipelineSpec": {
+    "name": "customer_transaction_summary",
+    "description": "Aggregate customer transactions by day",
+    "domain": "credit_risk",
+    "sourceDatasets": [
+      "ds-001"
+    ],
+    "targetDataset": "customer_daily_summary",
+    "sql": "-- Model: customer_transaction_summary\n-- Description: Aggregate customer transactions by day\n-- Generated: 2024-01-15T10:30:00.000Z\n\nWITH source_data AS (\n  SELECT *\n  FROM customer_transactions\n),\n\ntransformed AS (\n  SELECT\n    transaction_id,\n    customer_id,\n    amount,\n    transaction_date,\n    status\n  FROM source_data\n  -- Transform rules: Group by customer and date, sum amounts\n)\n\nSELECT * FROM transformed;",
+    "tests": [
+      {
+        "name": "schema_contract_test",
+        "type": "unit",
+        "sampleInput": [],
+        "expectedOutput": []
+      }
+    ],
+    "dqChecks": [
+      {
+        "name": "transaction_id_completeness",
+        "type": "completeness",
+        "rule": "transaction_id IS NOT NULL",
+        "threshold": 0.95
+      },
+      {
+        "name": "transaction_id_uniqueness",
+        "type": "uniqueness",
+        "rule": "COUNT(DISTINCT transaction_id) = COUNT(*)",
+        "threshold": 1
+      }
+    ]
+  }
+}
