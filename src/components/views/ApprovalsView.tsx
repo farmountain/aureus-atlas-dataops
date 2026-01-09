@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useKV } from '@github/spark/hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle, XCircle, Clock, FileText, Warning } from '@phosphor-icons/react';
+import { CheckCircle, XCircle, Clock, FileText, Warning, ShieldCheck } from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import type { ApprovalRequest } from '@/lib/types';
+import { ApprovalService, type ApprovalObject } from '@/lib/approval-service';
+import { AureusGuard } from '@/lib/aureus-guard';
+import { PolicyEvaluator } from '@/lib/policy-evaluator';
+import type { ApprovalRequest, UserRole } from '@/lib/types';
 import { RiskLevelBadge, ApprovalStatusBadge } from '../badges/StatusBadges';
 
 interface ApprovalsViewProps {
@@ -17,21 +21,131 @@ interface ApprovalsViewProps {
 export function ApprovalsView({ approvals }: ApprovalsViewProps) {
   const [selectedApproval, setSelectedApproval] = useState<ApprovalRequest | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useKV<UserRole>('user_role', 'analyst');
+  const [storedApprovals, setStoredApprovals] = useKV<ApprovalObject[]>('approval_objects', []);
 
-  const handleApprove = () => {
-    toast.success('Approval granted', {
-      description: 'The requested action has been approved and will be executed.',
+  const approvalService = useMemo(() => {
+    const guard = new AureusGuard(
+      {
+        environment: 'prod',
+        budgetLimits: { tokenBudget: 100000, queryCostBudget: 1000 },
+        enableAudit: true,
+        enableSnapshots: true,
+      },
+      new PolicyEvaluator()
+    );
+    const service = new ApprovalService(guard);
+    
+    (storedApprovals || []).forEach(approval => {
+      service['approvals'].set(approval.id, approval);
     });
-    setSelectedApproval(null);
-    setApprovalComment('');
+    
+    return service;
+  }, []);
+
+  useEffect(() => {
+    const syncToKV = () => {
+      const allApprovals = approvalService.getAllApprovals();
+      setStoredApprovals(allApprovals);
+    };
+    
+    const interval = setInterval(syncToKV, 2000);
+    return () => clearInterval(interval);
+  }, [approvalService, setStoredApprovals]);
+
+  const handleApprove = async () => {
+    if (!selectedApproval) return;
+
+    if (currentUserRole !== 'approver' && currentUserRole !== 'admin') {
+      toast.error('Unauthorized', {
+        description: `Your role '${currentUserRole}' cannot approve. Must be 'approver' or 'admin'.`,
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const approvalObj = approvalService.getApproval(selectedApproval.id);
+      
+      if (!approvalObj) {
+        toast.error('Approval not found in service');
+        setIsProcessing(false);
+        return;
+      }
+
+      const result = await approvalService.approveAndExecute(
+        selectedApproval.id,
+        'current.user',
+        currentUserRole,
+        approvalComment || undefined
+      );
+
+      toast.success('Approval granted and action executed', {
+        description: `Snapshot created: ${result.snapshotId}`,
+        action: {
+          label: 'View Evidence',
+          onClick: () => console.log('Evidence pack:', result),
+        },
+      });
+
+      setSelectedApproval(null);
+      setApprovalComment('');
+      
+      const allApprovals = approvalService.getAllApprovals();
+      setStoredApprovals(allApprovals);
+    } catch (error) {
+      toast.error('Approval failed', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleReject = () => {
-    toast.error('Approval rejected', {
-      description: 'The requested action has been rejected.',
-    });
-    setSelectedApproval(null);
-    setApprovalComment('');
+  const handleReject = async () => {
+    if (!selectedApproval) return;
+
+    if (currentUserRole !== 'approver' && currentUserRole !== 'admin') {
+      toast.error('Unauthorized', {
+        description: `Your role '${currentUserRole}' cannot reject. Must be 'approver' or 'admin'.`,
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const approvalObj = approvalService.getApproval(selectedApproval.id);
+      
+      if (!approvalObj) {
+        toast.error('Approval not found in service');
+        setIsProcessing(false);
+        return;
+      }
+
+      await approvalService.reject(
+        selectedApproval.id,
+        'current.user',
+        currentUserRole,
+        approvalComment || undefined
+      );
+
+      toast.error('Approval rejected', {
+        description: 'The requested action has been rejected and will not be executed.',
+      });
+
+      setSelectedApproval(null);
+      setApprovalComment('');
+      
+      const allApprovals = approvalService.getAllApprovals();
+      setStoredApprovals(allApprovals);
+    } catch (error) {
+      toast.error('Rejection failed', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const pendingApprovals = approvals.filter(a => a.status === 'pending');
@@ -39,6 +153,37 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
 
   return (
     <div className="space-y-6">
+      <Card className="border-accent/50 bg-accent/5">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <ShieldCheck weight="fill" className="h-5 w-5 text-accent" />
+              <div>
+                <div className="font-semibold">Your Role: <span className="text-accent">{currentUserRole}</span></div>
+                <div className="text-sm text-muted-foreground">
+                  {currentUserRole === 'approver' || currentUserRole === 'admin' 
+                    ? 'You can approve or reject pending requests'
+                    : 'Only approver or admin roles can approve/reject requests'}
+                </div>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const roles: UserRole[] = ['analyst', 'approver', 'admin', 'viewer'];
+                const currentIndex = roles.indexOf(currentUserRole || 'analyst');
+                const nextRole = roles[(currentIndex + 1) % roles.length];
+                setCurrentUserRole(nextRole);
+                toast.info(`Role changed to: ${nextRole}`);
+              }}
+            >
+              Switch Role (Demo)
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -179,16 +324,25 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
               </div>
 
               <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setSelectedApproval(null)}>
+                <Button variant="outline" onClick={() => setSelectedApproval(null)} disabled={isProcessing}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={handleReject} className="gap-2">
+                <Button 
+                  variant="destructive" 
+                  onClick={handleReject} 
+                  className="gap-2"
+                  disabled={isProcessing || (currentUserRole !== 'approver' && currentUserRole !== 'admin')}
+                >
                   <XCircle weight="fill" className="h-5 w-5" />
                   Reject
                 </Button>
-                <Button onClick={handleApprove} className="gap-2">
+                <Button 
+                  onClick={handleApprove} 
+                  className="gap-2"
+                  disabled={isProcessing || (currentUserRole !== 'approver' && currentUserRole !== 'admin')}
+                >
                   <CheckCircle weight="fill" className="h-5 w-5" />
-                  Approve
+                  {isProcessing ? 'Processing...' : 'Approve'}
                 </Button>
               </DialogFooter>
             </>

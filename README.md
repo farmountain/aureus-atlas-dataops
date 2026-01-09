@@ -108,11 +108,19 @@ daily freshness, and fraud detection quality checks..."
 
 **Sample Inputs**: See [examples/config_copilot_samples.md](./examples/config_copilot_samples.md) for 3 detailed examples
 
-#### 5. Review Approvals (Approvals Tab)
+#### 5. Review Approvals (Approvals Tab) 🆕
 - See pending approval requests with risk levels
-- Review complete evidence packs
-- Approve or reject with audit comments
+- **Role-based authorization**: Switch between analyst/approver/admin/viewer roles
+- Review complete evidence packs before deciding
+- **Approve**: Executes action with snapshot + audit trail (approver/admin only)
+- **Reject**: Blocks action with audit comment (approver/admin only)
 - All decisions are recorded immutably
+- **High-risk actions requiring approval**:
+  - Production deployments
+  - Policy changes
+  - High PII dataset access
+
+**Implementation Details**: See [CONTROL_EDIT_APPROVALS.md](./CONTROL_EDIT_APPROVALS.md) for complete technical documentation
 
 ## Sample Questions to Try
 

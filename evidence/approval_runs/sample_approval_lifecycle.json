@@ -1,0 +1,92 @@
+{
+  "approvalId": "apr-1703001234567-abc123",
+  "evidencePackId": "evd-apr-1703001234567-abc123",
+  "stage": "approved_and_executed",
+  "timestamp": "2024-01-15T14:32:15.789Z",
+  "approval": {
+    "id": "apr-1703001234567-abc123",
+    "status": "APPROVED",
+    "actionType": "prod_deploy",
+    "requester": "john.analyst",
+    "requesterRole": "analyst",
+    "description": "Deploy daily credit risk aggregation pipeline to production",
+    "riskLevel": "high",
+    "requestedAt": "2024-01-15T14:30:00.000Z",
+    "approver": "jane.approver",
+    "approverRole": "approver",
+    "approvalTimestamp": "2024-01-15T14:32:00.000Z",
+    "approvalComment": "Approved after reviewing test results and DQ checks. All controls passing.",
+    "snapshotId": "snap-1703001235000-xyz789"
+  },
+  "actionContext": {
+    "actionType": "pipeline_deploy",
+    "actor": "john.analyst",
+    "role": "analyst",
+    "environment": "prod",
+    "metadata": {
+      "domain": "credit_risk",
+      "targetEnvironment": "prod",
+      "pipelineName": "credit_risk_daily_agg"
+    }
+  },
+  "actionPayload": {
+    "pipelineName": "credit_risk_daily_agg",
+    "sourceDatasets": [
+      "loan_portfolio",
+      "collateral_valuations"
+    ],
+    "targetDataset": "credit_risk_summary",
+    "environment": "prod",
+    "sql": "SELECT loan_id, SUM(outstanding_balance) as total_exposure, AVG(default_probability) as avg_pd FROM loan_portfolio JOIN collateral_valuations USING(loan_id) GROUP BY loan_id",
+    "testsPass": true,
+    "dqChecksPass": true,
+    "rollbackPlan": {
+      "previousVersion": "v1.2.3",
+      "snapshotId": "snap-1703001235000-xyz789"
+    }
+  },
+  "auditEventIds": [
+    "audit-1703001200000-req123",
+    "audit-1703001220000-appr456",
+    "audit-1703001235000-exec789"
+  ],
+  "executionResult": {
+    "executionResult": {
+      "success": true,
+      "auditEventId": "audit-1703001235000-exec789",
+      "snapshotId": "snap-1703001235000-xyz789",
+      "data": {
+        "deploymentId": "deploy-1703001235000-prod-abc",
+        "pipelineName": "credit_risk_daily_agg",
+        "version": "v1.2.4",
+        "environment": "prod",
+        "deployedAt": "2024-01-15T14:32:15.000Z",
+        "status": "deployed"
+      }
+    },
+    "timestamp": "2024-01-15T14:32:15.789Z",
+    "actionType": "prod_deploy",
+    "payload": {
+      "pipelineName": "credit_risk_daily_agg",
+      "sourceDatasets": [
+        "loan_portfolio",
+        "collateral_valuations"
+      ],
+      "targetDataset": "credit_risk_summary",
+      "environment": "prod"
+    }
+  },
+  "complianceChecks": {
+    "policyChecksPass": true,
+    "snapshotCreated": true,
+    "auditTrailComplete": true,
+    "roleAuthorizationVerified": true,
+    "evidencePackGenerated": true
+  },
+  "rollbackInstructions": {
+    "command": "rollback_to_snapshot",
+    "snapshotId": "snap-1703001235000-xyz789",
+    "estimatedDuration": "2 minutes",
+    "validationRequired": true
+  }
+}
