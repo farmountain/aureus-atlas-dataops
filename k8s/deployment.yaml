@@ -1,0 +1,243 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aureus-frontend
+  namespace: aureus
+  labels:
+    app: aureus
+    component: frontend
+    tier: production
+    version: v0.1.0
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    aureus.io/evidence-retention: "90d"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: aureus
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: aureus
+        component: frontend
+        tier: production
+        version: v0.1.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: aureus-frontend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - aureus
+                    - key: component
+                      operator: In
+                      values:
+                        - frontend
+                topologyKey: kubernetes.io/hostname
+      
+      containers:
+        - name: frontend
+          image: aureus/frontend:0.1.0
+          imagePullPolicy: IfNotPresent
+          
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: APP_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: aureus-config
+                  key: app.version
+            - name: EVIDENCE_RETENTION_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: aureus-config
+                  key: evidence.retention.days
+          
+          envFrom:
+            - configMapRef:
+                name: aureus-config
+            - secretRef:
+                name: aureus-secrets
+          
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 30
+          
+          volumeMounts:
+            - name: evidence-storage
+              mountPath: /app/evidence
+            - name: tmp
+              mountPath: /tmp
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            capabilities:
+              drop:
+                - ALL
+      
+      volumes:
+        - name: evidence-storage
+          persistentVolumeClaim:
+            claimName: aureus-evidence-pvc
+        - name: tmp
+          emptyDir: {}
+      
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aureus-frontend
+  namespace: aureus
+  labels:
+    app: aureus
+    component: frontend
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: aureus-evidence-pvc
+  namespace: aureus
+  labels:
+    app: aureus
+    purpose: evidence-storage
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "fast"
+    aureus.io/backup: "daily"
+    aureus.io/retention: "90d"
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: aureus-frontend-pdb
+  namespace: aureus
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: aureus
+      component: frontend
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aureus-frontend-hpa
+  namespace: aureus
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aureus-frontend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+      selectPolicy: Max

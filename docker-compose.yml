@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  aureus-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: aureus-frontend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - VITE_APP_VERSION=${APP_VERSION:-0.1.0}
+      - VITE_EVIDENCE_RETENTION_DAYS=${EVIDENCE_RETENTION_DAYS:-90}
+    volumes:
+      - evidence-data:/app/evidence
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.aureus.service=frontend"
+      - "com.aureus.version=${APP_VERSION:-0.1.0}"
+      - "com.aureus.tier=production"
+    networks:
+      - aureus-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service,version"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aureus-postgres
+    environment:
+      - POSTGRES_DB=aureus_metadata
+      - POSTGRES_USER=${POSTGRES_USER:-aureus}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aureus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aureus-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: aureus-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aureus-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  postgres-data:
+    driver: local
+    labels:
+      - "com.aureus.volume=metadata"
+      - "com.aureus.backup=daily"
+  redis-data:
+    driver: local
+    labels:
+      - "com.aureus.volume=cache"
+  evidence-data:
+    driver: local
+    labels:
+      - "com.aureus.volume=evidence"
+      - "com.aureus.backup=hourly"
+      - "com.aureus.retention=90d"
+
+networks:
+  aureus-network:
+    driver: bridge
+    labels:
+      - "com.aureus.network=main"

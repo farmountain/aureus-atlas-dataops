@@ -59,13 +59,41 @@ Pre-configured domains reflecting real banking operations:
 
 This is a Spark application that runs entirely in the browser with no backend required for the demo.
 
-### Running Locally
+### Running Locally (Development)
 
 The application is pre-configured and ready to run:
 
 ```bash
-# No build step needed - runs directly in Spark runtime
+# Development mode (Spark runtime)
 # Simply open in your Spark environment
+
+# OR local development
+npm install
+npm run dev
+# Application available at http://localhost:5173
+```
+
+### Running with Docker Compose
+
+```bash
+# Development mode with hot reload
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# Production mode
+docker compose up -d
+
+# Access application at http://localhost:5000
+```
+
+### Deploying to Kubernetes
+
+See [Deployment Guide](./docs/deployment-guide.md) for comprehensive instructions.
+
+```bash
+# Quick deployment
+./scripts/deploy-check.sh --environment production
+kubectl apply -f k8s/
+kubectl rollout status deployment/aureus-frontend -n aureus
 ```
 
 ### Using the Platform
@@ -312,11 +340,16 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for full roadmap including:
 - Real OPA policies
 - Basic authentication
 
-### Phase 3 (Production Ready)
-- HA deployment (K8s)
-- Enterprise SSO
-- Comprehensive testing
-- Security audit
+### Phase 3 (Production Ready) ✅
+- ✅ HA deployment (K8s manifests with 3 replicas, HPA, PDB)
+- ✅ Docker Compose orchestration
+- ✅ Comprehensive runbooks (incident response, rollback, audit retrieval)
+- ✅ Data retention policy
+- ✅ SLO definitions (13 SLOs covering availability, performance, compliance)
+- ✅ Deployment automation scripts
+- ✅ Evidence export utilities
+- Enterprise SSO (planned)
+- Security audit (planned)
 
 ### Phase 4 (Advanced Features)
 - Real-time lineage graphs
@@ -330,6 +363,75 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for full roadmap including:
 - Query optimization
 - Policy conflict detection
 
+## Production Deployment
+
+### Quick Links
+- 📘 [Deployment Guide](./docs/deployment-guide.md) - Complete deployment procedures
+- 🚨 [Incident Response](./runbooks/incident-response.md) - Emergency procedures
+- ⏮️ [Rollback Procedure](./runbooks/rollback-procedure.md) - Rollback guide
+- 📊 [SLO Definitions](./docs/slo-definitions.md) - Performance targets
+- 📦 [Data Retention Policy](./docs/data-retention-policy.md) - Compliance requirements
+- 🔍 [Audit Evidence Retrieval](./runbooks/audit-evidence-retrieval.md) - Evidence export
+
+### Production Readiness Checklist
+
+✅ **Infrastructure**
+- Docker Compose for local/staging environments
+- Kubernetes manifests (Deployment, Service, Ingress, ConfigMap, HPA, PDB)
+- Network policies for traffic isolation
+- Persistent storage for evidence
+
+✅ **Operational Procedures**
+- Incident response runbook with 5 common scenarios
+- Rollback procedures for 5 change types
+- Audit evidence retrieval procedures
+- Pre-deployment validation script
+- Evidence export utility
+
+✅ **Compliance & Governance**
+- Data retention policy (7-year audit logs, 3-year query history)
+- 13 comprehensive SLOs (availability, latency, compliance)
+- Audit trail requirements (100% coverage)
+- Evidence-based change management
+
+✅ **Security**
+- Non-root containers with read-only root filesystem
+- TLS/SSL configuration with cert-manager
+- Secret management (Kubernetes Secrets, external options)
+- Network policies for ingress/egress control
+- Security headers in Nginx configuration
+
+✅ **Monitoring & Alerting**
+- Health check endpoints
+- Resource limits and requests
+- Liveness, readiness, startup probes
+- SLO-based alerting thresholds
+- Multi-window burn rate alerts
+
+### Getting Started with Production Deployment
+
+```bash
+# 1. Validate environment
+./scripts/deploy-check.sh --environment production --namespace aureus
+
+# 2. Create secrets (replace placeholder values!)
+kubectl create namespace aureus
+kubectl create secret generic aureus-secrets \
+  --from-literal=database.password='YOUR_STRONG_PASSWORD' \
+  --from-literal=redis.password='YOUR_STRONG_PASSWORD' \
+  -n aureus
+
+# 3. Deploy
+kubectl apply -f k8s/
+
+# 4. Monitor rollout
+kubectl rollout status deployment/aureus-frontend -n aureus
+
+# 5. Verify
+kubectl get pods -n aureus
+curl https://your-domain.com/health
+```
+
 ## License
 
 Copyright © 2024. All rights reserved.
@@ -339,8 +441,9 @@ Copyright © 2024. All rights reserved.
 For questions or issues:
 1. Review [ARCHITECTURE.md](./ARCHITECTURE.md) for system design
 2. Check [PRD.md](./PRD.md) for product requirements
-3. Examine component code for implementation details
+3. See [Deployment Guide](./docs/deployment-guide.md) for deployment procedures
+4. Consult [Runbooks](./runbooks/) for operational procedures
 
 ---
 
-**Note**: This is a frontend demonstration. For a production deployment, the full backend architecture (FastAPI, Postgres, OPA, Docker Compose) would be required as documented in ARCHITECTURE.md.
+**Note**: This application includes both frontend demonstration capabilities (Spark runtime) and production-ready deployment assets (Docker, Kubernetes, runbooks). For production deployment, follow the [Deployment Guide](./docs/deployment-guide.md).
