@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useKV } from '@github/spark/hooks';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MagnifyingGlass, Database, GitBranch, CheckCircle, Shield, Sparkle } from '@phosphor-icons/react';
+import { MagnifyingGlass, Database, GitBranch, CheckCircle, Shield, Sparkle, ChartLineUp } from '@phosphor-icons/react';
 import { QueryView } from './QueryView';
 import { DatasetsView } from './DatasetsView';
 import { PipelinesView } from './PipelinesView';
 import { ApprovalsView } from './ApprovalsView';
 import { GuardDemo } from './GuardDemo';
 import { ConfigCopilotView } from './ConfigCopilotView';
+import { ObservabilityView } from './ObservabilityView';
 import type { Dataset, ApprovalRequest, QueryResult, PipelineSpec } from '@/lib/types';
 import { SAMPLE_DATASETS, SAMPLE_APPROVALS } from '@/lib/mockData';
 
@@ -45,7 +46,7 @@ export default function App() {
 
       <div className="container mx-auto px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-4xl grid-cols-6 mb-8">
+          <TabsList className="grid w-full max-w-5xl grid-cols-7 mb-8">
             <TabsTrigger value="query" className="gap-2">
               <MagnifyingGlass weight="fill" className="h-4 w-4" />
               Ask
@@ -74,6 +75,10 @@ export default function App() {
             <TabsTrigger value="guard" className="gap-2">
               <Shield weight="fill" className="h-4 w-4" />
               Guard
+            </TabsTrigger>
+            <TabsTrigger value="observability" className="gap-2">
+              <ChartLineUp weight="fill" className="h-4 w-4" />
+              Metrics
             </TabsTrigger>
           </TabsList>
 
@@ -107,6 +112,10 @@ export default function App() {
 
           <TabsContent value="guard" className="mt-0">
             <GuardDemo />
+          </TabsContent>
+
+          <TabsContent value="observability" className="mt-0">
+            <ObservabilityView />
           </TabsContent>
         </Tabs>
       </div>

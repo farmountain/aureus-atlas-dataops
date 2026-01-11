@@ -1,9 +1,13 @@
 import type { DataContract, PipelineSpec, Dataset, QueryResult, PolicyCheck } from './types';
 import { SAMPLE_DATASETS } from './mockData';
 import { policyEngine } from './policyEngine';
+import { observabilityService } from './observability';
+import { wrapWithBudgetEnforcement } from './budget-enforcer';
 
 export async function generateDataContract(description: string): Promise<DataContract> {
-  const prompt = `You are a data governance expert at a bank. A user wants to onboard a new dataset.
+  return wrapWithBudgetEnforcement(
+    async () => {
+      const prompt = `You are a data governance expert at a bank. A user wants to onboard a new dataset.
 
 User description: ${description}
 
@@ -32,23 +36,29 @@ Rules:
 - Include realistic validation rules
 - Owner should be a relevant team name`;
 
-  const response = await window.spark.llm(prompt, 'gpt-4o', true);
-  const contract = JSON.parse(response) as DataContract;
-  
-  return contract;
+      const response = await window.spark.llm(prompt, 'gpt-4o', true);
+      const contract = JSON.parse(response) as DataContract;
+      
+      return contract;
+    },
+    'config_copilot',
+    description
+  );
 }
 
 export async function generatePipelineSpec(
   description: string,
   availableDatasets: Dataset[]
 ): Promise<PipelineSpec> {
-  const datasetsContext = availableDatasets.map(ds => ({
-    name: ds.name,
-    domain: ds.domain,
-    schema: ds.schema.map(col => `${col.name}:${col.type}`).join(', '),
-  }));
+  return wrapWithBudgetEnforcement(
+    async () => {
+      const datasetsContext = availableDatasets.map(ds => ({
+        name: ds.name,
+        domain: ds.domain,
+        schema: ds.schema.map(col => `${col.name}:${col.type}`).join(', '),
+      }));
 
-  const prompt = `You are a data engineering expert at a bank. A user wants to create a data pipeline.
+      const prompt = `You are a data engineering expert at a bank. A user wants to create a data pipeline.
 
 User request: ${description}
 
@@ -89,28 +99,34 @@ Rules:
 - Choose source datasets from the available list that match the requirements
 - Target dataset name should reflect what the pipeline produces`;
 
-  const response = await window.spark.llm(prompt, 'gpt-4o', true);
-  const spec = JSON.parse(response) as PipelineSpec;
-  
-  return spec;
+      const response = await window.spark.llm(prompt, 'gpt-4o', true);
+      const spec = JSON.parse(response) as PipelineSpec;
+      
+      return spec;
+    },
+    'pipeline',
+    description
+  );
 }
 
 export async function generateSQLFromQuestion(
   question: string,
   availableDatasets: Dataset[]
 ): Promise<{ sql: string; datasets: Dataset[]; intent: Record<string, unknown> }> {
-  const datasetsContext = availableDatasets.map(ds => ({
-    name: ds.name,
-    domain: ds.domain,
-    description: ds.description,
-    schema: ds.schema.map(col => ({
-      name: col.name,
-      type: col.type,
-      pii: col.pii,
-    })),
-  }));
+  return wrapWithBudgetEnforcement(
+    async () => {
+      const datasetsContext = availableDatasets.map(ds => ({
+        name: ds.name,
+        domain: ds.domain,
+        description: ds.description,
+        schema: ds.schema.map(col => ({
+          name: col.name,
+          type: col.type,
+          pii: col.pii,
+        })),
+      }));
 
-  const prompt = `You are a SQL expert at a bank. A user asks a data question.
+      const prompt = `You are a SQL expert at a bank. A user asks a data question.
 
 User question: ${question}
 
@@ -142,22 +158,26 @@ Rules:
 - SQL should be read-only (no INSERT/UPDATE/DELETE)
 - Include appropriate WHERE, GROUP BY, ORDER BY clauses`;
 
-  const response = await window.spark.llm(prompt, 'gpt-4o', true);
-  const result = JSON.parse(response) as {
-    intent: Record<string, unknown>;
-    datasets: string[];
-    sql: string;
-  };
+      const response = await window.spark.llm(prompt, 'gpt-4o', true);
+      const result = JSON.parse(response) as {
+        intent: Record<string, unknown>;
+        datasets: string[];
+        sql: string;
+      };
 
-  const matchedDatasets = availableDatasets.filter(ds => 
-    result.datasets.includes(ds.name)
+      const matchedDatasets = availableDatasets.filter(ds => 
+        result.datasets.includes(ds.name)
+      );
+
+      return {
+        sql: result.sql,
+        datasets: matchedDatasets,
+        intent: result.intent,
+      };
+    },
+    'query',
+    question
   );
-
-  return {
-    sql: result.sql,
-    datasets: matchedDatasets,
-    intent: result.intent,
-  };
 }
 
 export async function executeQuery(
