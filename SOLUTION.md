@@ -93,6 +93,139 @@ NL Input ("I need a credit card transaction dataset...")
 - Policies: 3-5 governance policies (access, masking, approval)
 - SLAs: Freshness, availability, quality targets with alerting
 
+### 3. End-to-End Demo Scripts 🆕
+
+Three comprehensive bash scripts demonstrate complete workflows with full evidence generation:
+
+#### Demo 1: Credit Risk Portfolio Monitoring
+**Script**: `scripts/demo_credit_risk.sh`
+
+Demonstrates loan portfolio risk analysis workflow:
+1. **Config Copilot**: Generates specs for loan portfolio dataset with risk metrics
+2. **Validation**: Validates dataset contract, DQ rules, policies, SLAs
+3. **Commit**: Creates snapshot and audit trail for rollback capability
+4. **Pipeline Generation**: Generates SQL model + 4 automated tests (schema, DQ, reconciliation)
+5. **Query Execution**: "What is the total exposure to high-risk loans?"
+6. **Evidence Pack**: Complete audit trail with all artifacts
+
+**Key Evidence Artifacts**:
+- `01_config_copilot_request.json` - NL input and generated specs
+- `02_validation_results.json` - Schema validation results
+- `03_commit_results.json` - Snapshot and audit event IDs
+- `04_pipeline_generation.json` - Generated SQL and test files
+- `07_query_execution.json` - Query with policy checks and results
+- `dataset_contract_credit_risk.json` - Full dataset specification
+- `pipeline_credit_risk_summary.sql` - Production-ready SQL
+- `pipeline_credit_risk_tests.sql` - 4 automated tests
+- `evidence_pack.md` - Human-readable summary
+- `evidence_pack.json` - Machine-readable index
+
+**Findings Demonstrated**:
+- Total high-risk exposure: $195M
+- Weighted average NPL ratio: 17.8%
+- All policy checks passed
+- PII properly masked (borrower_id)
+
+#### Demo 2: FCC/AML Alert Triage
+**Script**: `scripts/demo_fcc_triage.sh`
+
+Demonstrates HIGH PII compliance workflow with approval gates:
+1. **Config Copilot**: Generates specs for AML alerts (HIGH PII, cross-border)
+2. **Validation**: Enhanced regulatory compliance checks (BSA, AML, OFAC, KYC)
+3. **Commit**: Enhanced audit trail for HIGH PII data
+4. **Pipeline Generation**: Real-time alert prioritization with composite scoring
+5. **Approval Gate**: Required approval for HIGH PII access (simulated approval)
+6. **Query Execution**: "Show critical alerts overdue or at risk"
+7. **Evidence Pack**: Auditor-ready with approval workflow
+
+**Unique Features**:
+- HIGH PII requires approval (demonstrates approval workflow)
+- Cross-border monitoring (US, EU, APAC)
+- Real-time SLA (60 seconds max latency)
+- 10-year audit retention for regulatory compliance
+- PII masking with per-record unmask justification
+- Alert on unusual access patterns
+
+**Findings Demonstrated**:
+- 23 critical priority alerts require attention
+- 8 alerts overdue (SLA breach)
+- 15 alerts at risk
+- Total exposure: $18.75M
+- 3 potential SAR filing candidates
+
+#### Demo 3: Finance Regulatory Reconciliation
+**Script**: `scripts/demo_finance_recon.sh`
+
+Demonstrates SOX compliance and financial control workflow:
+1. **Config Copilot**: Generates specs for GL-to-regulatory-report reconciliation
+2. **Validation**: SOX compliance checks and control framework validation
+3. **Commit**: SOX-compliant audit trail (7-year retention)
+4. **Pipeline Generation**: Reconciliation with control totals and variance analysis
+5. **Query Execution**: "Show material variances unreconciled or unexplained"
+6. **Evidence Pack**: SOX-compliant evidence with control status
+
+**Control Framework**:
+- Material variance threshold: $100K
+- Submission deadline tracking
+- Controller approval for material variances
+- Control total reconciliation
+- Variance explanation requirements
+- SOX control objective verification
+
+**Findings Demonstrated**:
+- 7 material variances identified
+- Total net variance: -$445,678.25
+- 4 variances unexplained (investigation required)
+- SOX Control Status: AT_RISK
+- Escalation to Controller required
+
+### Demo Script Features
+
+All three demos demonstrate:
+- ✅ **EGD Compliance**: Every action generates verifiable evidence
+- ✅ **AUREUS Guard**: Policy checks, audit events, snapshots for all mutations
+- ✅ **Budget Tracking**: Token usage and cost estimates
+- ✅ **Rate Limiting**: Per-user/tenant enforcement (simulated)
+- ✅ **Rollback Capability**: Every snapshot includes restore command
+- ✅ **Audit Trail**: Immutable event log with retention policies
+- ✅ **Evidence Packs**: Human-readable (MD) + machine-readable (JSON)
+
+**Common Evidence Structure**:
+```
+evidence/{demo_name}_{timestamp}/
+├── 01_config_copilot_request.json
+├── 02_validation_results.json
+├── 03_commit_results.json
+├── 04_pipeline_generation.json
+├── 05_approval_request.json (if required)
+├── 06_approval_granted.json (if required)
+├── 07_query_execution.json
+├── dataset_contract_*.json
+├── pipeline_*.sql
+├── pipeline_*_tests.sql
+├── evidence_pack.json
+└── evidence_pack.md
+```
+
+**Running Demos**:
+```bash
+# Make scripts executable
+chmod +x scripts/demo_*.sh
+
+# Run individual demos
+./scripts/demo_credit_risk.sh
+./scripts/demo_fcc_triage.sh
+./scripts/demo_finance_recon.sh
+
+# Run all demos
+for demo in scripts/demo_*.sh; do $demo; done
+
+# View evidence
+cat evidence/credit_risk_portfolio_*/evidence_pack.md
+cat evidence/fcc_aml_triage_*/query_results_critical_alerts.json | jq .
+cat evidence/finance_reconciliation_*/evidence_pack.json | jq .
+```
+
 #### Approval Workflows (Approvals Tab)
 - Review pending approval requests
 - 3 sample approvals pre-loaded:

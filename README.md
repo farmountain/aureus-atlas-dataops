@@ -150,6 +150,51 @@ daily freshness, and fraud detection quality checks..."
 
 **Implementation Details**: See [CONTROL_EDIT_APPROVALS.md](./CONTROL_EDIT_APPROVALS.md) for complete technical documentation
 
+## End-to-End Demo Scripts
+
+**NEW**: Three complete demo scenarios showcase the platform's value with full evidence generation:
+
+### 1. Credit Risk Portfolio Monitoring
+```bash
+./scripts/demo_credit_risk.sh
+```
+- Generates specs for loan portfolio analysis
+- Creates reconciliation pipeline with automated tests
+- Executes risk exposure queries with policy checks
+- **Evidence**: Complete audit trail in `evidence/credit_risk_portfolio_*/`
+
+### 2. FCC/AML Alert Triage
+```bash
+./scripts/demo_fcc_triage.sh
+```
+- Manages HIGH PII compliance data with approval gates
+- Builds real-time alert prioritization pipeline
+- Demonstrates cross-border jurisdiction controls
+- **Evidence**: Enhanced compliance pack in `evidence/fcc_aml_triage_*/`
+
+### 3. Finance Regulatory Reconciliation
+```bash
+./scripts/demo_finance_recon.sh
+```
+- GL-to-regulatory-report reconciliation workflow
+- SOX compliance controls with material variance detection
+- Control totals and submission deadline tracking
+- **Evidence**: Auditor-ready pack in `evidence/finance_reconciliation_*/`
+
+Each script demonstrates:
+✅ Config Copilot: NL → structured specs → validation → commit  
+✅ Pipeline Generation: SQL models + tests + DQ checks  
+✅ Approval Gates: High-risk actions require authorization  
+✅ Query Execution: Policy enforcement + budget tracking  
+✅ Evidence Packs: Complete audit trail with rollback capability  
+
+**Run all demos:**
+```bash
+./scripts/demo_credit_risk.sh
+./scripts/demo_fcc_triage.sh
+./scripts/demo_finance_recon.sh
+```
+
 ## Sample Questions to Try
 
 ### Credit Risk
