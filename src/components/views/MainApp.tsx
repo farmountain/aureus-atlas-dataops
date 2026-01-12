@@ -9,13 +9,14 @@ import { ApprovalsView } from './ApprovalsView';
 import { GuardDemo } from './GuardDemo';
 import { ConfigCopilotView } from './ConfigCopilotView';
 import { ObservabilityView } from './ObservabilityView';
-import type { Dataset, ApprovalRequest, QueryResult, PipelineSpec } from '@/lib/types';
+import type { Dataset, ApprovalRequest, PipelineSpec } from '@/lib/types';
+import type { QueryAskResponse } from '@/lib/query-service';
 import { SAMPLE_DATASETS, SAMPLE_APPROVALS } from '@/lib/mockData';
 
 export default function App() {
   const [datasets] = useKV<Dataset[]>('datasets', SAMPLE_DATASETS);
   const [approvals] = useKV<ApprovalRequest[]>('approvals', SAMPLE_APPROVALS);
-  const [queryHistory, setQueryHistory] = useKV<QueryResult[]>('query_history', []);
+  const [queryHistory, setQueryHistory] = useKV<QueryAskResponse[]>('query_history', []);
   const [pipelines, setPipelines] = useKV<PipelineSpec[]>('pipelines', []);
   const [activeTab, setActiveTab] = useState('query');
 
