@@ -1,6 +1,5 @@
 import type { DataContract, PipelineSpec, Dataset, QueryResult, PolicyCheck } from './types';
 import { SAMPLE_DATASETS } from './mockData';
-import { policyEngine } from './policyEngine';
 import { observabilityService } from './observability';
 import { wrapWithBudgetEnforcement } from './budget-enforcer';
 

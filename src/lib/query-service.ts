@@ -50,6 +50,7 @@ export interface QueryAskRequest {
 
 export interface QueryAskResponse {
   queryId: string;
+  question: string;
   intent: QueryIntent;
   sql: string;
   policyChecks: PolicyCheck[];
@@ -172,6 +173,7 @@ export class QueryService {
 
     return {
       queryId,
+      question: request.question,
       intent,
       sql,
       policyChecks,
