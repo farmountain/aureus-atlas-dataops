@@ -1,8 +1,9 @@
-import type { Dataset, PolicyCheck, Domain } from './types';
+import type { Dataset, PolicyCheck, Domain, UserRole } from './types';
 import { AureusGuard } from './aureus-guard';
 import type { ActionContext } from './aureus-types';
 import { PostgresSandbox } from './postgres-sandbox';
 import { queryRateLimiter } from './rate-limiter';
+import { ApprovalService } from './approval-service';
 
 export interface QueryIntent {
   question: string;
@@ -72,11 +73,13 @@ export class QueryService {
   private sandbox: PostgresSandbox;
   private datasets: Map<string, Dataset>;
   private lineageStore: Map<string, QueryLineage> = new Map();
+  private approvalService: ApprovalService;
 
   constructor(aureusGuard: AureusGuard, datasets: Map<string, Dataset>) {
     this.aureusGuard = aureusGuard;
     this.datasets = datasets;
     this.sandbox = new PostgresSandbox();
+    this.approvalService = new ApprovalService(aureusGuard);
   }
 
   private generateId(prefix: string): string {
@@ -110,21 +113,6 @@ export class QueryService {
       },
     };
 
-    const guardRequest = {
-      context,
-      payload: {
-        question: request.question,
-        intent,
-        datasets: requiredDatasets.map(ds => ds.id),
-      },
-    };
-
-    const guardResult = await this.aureusGuard.execute(guardRequest);
-
-    if (!guardResult.success) {
-      throw new Error(`Query blocked by policy: ${guardResult.error}`);
-    }
-
     const evaluation = this.aureusGuard['policyEvaluator'].evaluateAll(context);
     const policyChecks: PolicyCheck[] = evaluation.decisions.map((d) => ({
       policyId: d.policyId,
@@ -138,10 +126,6 @@ export class QueryService {
     if (blockedCheck) {
       throw new Error(`Query blocked: ${blockedCheck.reason}`);
     }
-
-    const sql = this.generateSQL(intent, requiredDatasets);
-
-    this.validateSQL(sql);
 
     const citations = this.generateCitations(requiredDatasets, intent);
 
@@ -157,6 +141,48 @@ export class QueryService {
         evaluated: timestamp,
       });
     }
+
+    const requiresApproval = policyChecks.some(p => p.result === 'require_approval');
+    if (requiresApproval) {
+      const approval = await this.approvalService.requestApproval({
+        actionType: 'pii_access_high',
+        requester: request.actor,
+        requesterRole: request.role as UserRole,
+        description: `Query approval required: ${request.question}`,
+        actionPayload: {
+          question: request.question,
+          intent,
+          datasets: requiredDatasets.map(ds => ds.id),
+          policyChecks,
+          freshnessChecks,
+        },
+        actionContext: context,
+      });
+      const reasons = policyChecks
+        .filter(p => p.result === 'require_approval')
+        .map(p => p.reason)
+        .join('; ');
+      throw new Error(`Query requires approval (${approval.id}): ${reasons}`);
+    }
+
+    const guardRequest = {
+      context,
+      payload: {
+        question: request.question,
+        intent,
+        datasets: requiredDatasets.map(ds => ds.id),
+      },
+    };
+
+    const guardResult = await this.aureusGuard.execute(guardRequest);
+
+    if (!guardResult.success) {
+      throw new Error(`Query blocked by policy: ${guardResult.error}`);
+    }
+
+    const sql = this.generateSQL(intent, requiredDatasets);
+
+    this.validateSQL(sql);
 
     const results = await this.sandbox.execute(sql, requiredDatasets);
 

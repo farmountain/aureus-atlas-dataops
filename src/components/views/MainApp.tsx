@@ -9,18 +9,19 @@ import { ApprovalsView } from './ApprovalsView';
 import { GuardDemo } from './GuardDemo';
 import { ConfigCopilotView } from './ConfigCopilotView';
 import { ObservabilityView } from './ObservabilityView';
-import type { Dataset, ApprovalRequest, PipelineSpec } from '@/lib/types';
+import type { Dataset, PipelineSpec } from '@/lib/types';
 import type { QueryAskResponse } from '@/lib/query-service';
-import { SAMPLE_DATASETS, SAMPLE_APPROVALS } from '@/lib/mockData';
+import { SAMPLE_DATASETS } from '@/lib/mockData';
+import { useApprovalQueue } from '@/lib/approval-service';
 
 export default function App() {
   const [datasets] = useKV<Dataset[]>('datasets', SAMPLE_DATASETS);
-  const [approvals] = useKV<ApprovalRequest[]>('approvals', SAMPLE_APPROVALS);
+  const [approvals] = useApprovalQueue();
   const [queryHistory, setQueryHistory] = useKV<QueryAskResponse[]>('query_history', []);
   const [pipelines, setPipelines] = useKV<PipelineSpec[]>('pipelines', []);
   const [activeTab, setActiveTab] = useState('query');
 
-  const pendingApprovals = (approvals || []).filter(a => a.status === 'pending');
+  const pendingApprovals = (approvals || []).filter(a => a.status === 'PENDING');
 
   return (
     <div className="min-h-screen bg-background">
@@ -108,7 +109,7 @@ export default function App() {
           </TabsContent>
 
           <TabsContent value="approvals" className="mt-0">
-            <ApprovalsView approvals={approvals || []} />
+            <ApprovalsView />
           </TabsContent>
 
           <TabsContent value="guard" className="mt-0">
