@@ -2,6 +2,7 @@ import { AureusGuard } from './aureus-guard';
 import { PolicyEvaluator } from './policy-evaluator';
 import type { ApprovalRequest, UserRole } from './types';
 import type { ActionContext, AuditEvent, Snapshot, Environment } from './aureus-types';
+import { EvidenceKeys, storeEvidenceBundle, type ApprovalEvidenceStage } from './evidence-store';
 
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -309,7 +310,7 @@ export class ApprovalService {
 
   private async writeEvidencePack(
     approval: ApprovalObject,
-    stage: 'request' | 'approved_and_executed' | 'rejected',
+    stage: ApprovalEvidenceStage,
     executionResult?: Record<string, unknown>
   ): Promise<void> {
     const evidencePack = {
@@ -338,7 +339,11 @@ export class ApprovalService {
       executionResult,
     };
 
+    const evidenceKey = EvidenceKeys.approvalPack(approval.evidencePackId, stage);
+    await storeEvidenceBundle(evidenceKey, evidencePack);
+
     console.log(`[ApprovalService] Evidence pack written: ${this.evidenceDir}/${approval.id}_${stage}.json`);
+    console.log(`[ApprovalService] Evidence bundle stored: ${evidenceKey}`);
     console.log(JSON.stringify(evidencePack, null, 2));
   }
 

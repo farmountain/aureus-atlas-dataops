@@ -15,6 +15,7 @@ import {
 } from './config-schemas';
 import type { AuditEvent } from './types';
 import { v4 as uuidv4 } from 'uuid';
+import { EvidenceKeys, getEvidenceBundle, storeEvidenceBundle } from './evidence-store';
 
 export interface ConfigDescribeRequest {
   nlInput: string;
@@ -460,7 +461,7 @@ Return ONLY a valid JSON object with a single "slas" property containing an arra
         actor: request.actor
       };
 
-      await spark.kv.set(`evidence/config_copilot_runs/${commitId}`, evidence);
+      await storeEvidenceBundle(EvidenceKeys.configCopilotRun(commitId), evidence);
 
       return {
         commitId,
@@ -488,12 +489,12 @@ Return ONLY a valid JSON object with a single "slas" property containing an arra
   }
 
   static async saveEvidence(evidence: ConfigEvidence): Promise<void> {
-    await spark.kv.set(`evidence/config_copilot_runs/${evidence.id}`, evidence);
+    await storeEvidenceBundle(EvidenceKeys.configCopilotRun(evidence.id), evidence);
   }
 
   static async getEvidence(evidenceId: string): Promise<ConfigEvidence | null> {
-    const evidence = await spark.kv.get<ConfigEvidence>(`evidence/config_copilot_runs/${evidenceId}`);
-    return evidence || null;
+    const bundle = await getEvidenceBundle<ConfigEvidence>(EvidenceKeys.configCopilotRun(evidenceId));
+    return bundle?.payload || null;
   }
 
   static async listEvidenceRuns(): Promise<string[]> {
