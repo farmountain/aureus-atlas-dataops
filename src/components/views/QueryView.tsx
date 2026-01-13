@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { MagnifyingGlass, Database, ShieldCheck, Clock, Warning, Sparkle } from '@phosphor-icons/react';
+import { MagnifyingGlass, Database, ShieldCheck, Clock, Warning, Sparkle, LockKey } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { PolicyBadge } from '../badges/StatusBadges';
 import type { Dataset } from '@/lib/types';
@@ -70,6 +70,12 @@ export function QueryView({ datasets, queryHistory, setQueryHistory }: QueryView
   };
 
   const currentResults = currentResult?.results ?? [];
+  const maskedFields = currentResult?.maskedFields ?? [];
+  const maskingPolicy = currentResult?.maskingPolicy;
+  const maskedFieldMap = useMemo(
+    () => new Map(maskedFields.map((field) => [field.field.toLowerCase(), field])),
+    [maskedFields]
+  );
 
   return (
     <div className="space-y-6">
@@ -168,29 +174,63 @@ export function QueryView({ datasets, queryHistory, setQueryHistory }: QueryView
                       No rows returned for this query.
                     </div>
                   ) : (
-                    <div className="rounded-md border overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            {Object.keys(currentResults[0] || {}).map((key) => (
-                              <TableHead key={key} className="font-semibold">
-                                {key.replace(/_/g, ' ').toUpperCase()}
-                              </TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {currentResults.map((row, idx) => (
-                            <TableRow key={idx}>
-                              {Object.values(row).map((value, vidx) => (
-                                <TableCell key={vidx} className="font-mono text-sm">
-                                  {typeof value === 'number' ? value.toLocaleString() : String(value)}
-                                </TableCell>
+                    <div className="space-y-3">
+                      {maskedFields.length > 0 && (
+                        <Alert>
+                          <LockKey weight="fill" className="h-4 w-4" />
+                          <AlertDescription className="space-y-2">
+                            <div className="font-semibold text-sm">
+                              Masked fields applied {maskingPolicy?.policyName ? `(${maskingPolicy.policyName})` : ''}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {maskingPolicy?.reason ?? maskedFields[0]?.reason}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {maskedFields.map((field) => (
+                                <Badge key={field.field} variant="secondary" className="gap-1">
+                                  <LockKey weight="fill" className="h-3 w-3" />
+                                  {field.field} ({field.strategy})
+                                </Badge>
                               ))}
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <div className="rounded-md border overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              {Object.keys(currentResults[0] || {}).map((key) => {
+                                const maskedField = maskedFieldMap.get(key.toLowerCase());
+                                return (
+                                  <TableHead key={key} className="font-semibold">
+                                    <div className="flex items-center gap-2">
+                                      <span>{key.replace(/_/g, ' ').toUpperCase()}</span>
+                                      {maskedField && (
+                                        <Badge variant="outline" className="gap-1 text-[10px]">
+                                          <LockKey weight="fill" className="h-3 w-3" />
+                                          Masked
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </TableHead>
+                                );
+                              })}
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {currentResults.map((row, idx) => (
+                              <TableRow key={idx}>
+                                {Object.values(row).map((value, vidx) => (
+                                  <TableCell key={vidx} className="font-mono text-sm">
+                                    {typeof value === 'number' ? value.toLocaleString() : String(value)}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   )}
                 </AccordionContent>
