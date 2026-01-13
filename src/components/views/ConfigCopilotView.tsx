@@ -6,8 +6,19 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sparkle, CheckCircle, WarningCircle, XCircle, ArrowRight, FloppyDisk } from '@phosphor-icons/react';
-import { ConfigCopilotService, type ConfigDescribeResponse, type ConfigCommitResponse } from '@/lib/config-copilot';
+import { Sparkle, CheckCircle, WarningCircle, XCircle, ArrowRight, FloppyDisk, DownloadSimple } from '@phosphor-icons/react';
+import {
+  ConfigCopilotService,
+  type ConfigDescribeResponse,
+  type ConfigCommitResponse,
+  type ConfigEvidence
+} from '@/lib/config-copilot';
+import {
+  EvidenceKeys,
+  downloadEvidenceBundle,
+  getEvidenceBundle,
+  verifyEvidenceBundle
+} from '@/lib/evidence-store';
 import { toast } from 'sonner';
 
 export function ConfigCopilotView() {
@@ -17,6 +28,10 @@ export function ConfigCopilotView() {
   const [describeResponse, setDescribeResponse] = useState<ConfigDescribeResponse | null>(null);
   const [commitResponse, setCommitResponse] = useState<ConfigCommitResponse | null>(null);
   const [commitMessage, setCommitMessage] = useState('');
+  const [evidenceVerification, setEvidenceVerification] = useState<null | {
+    status: 'verified' | 'invalid';
+    detail: string;
+  }>(null);
 
   const handleDescribe = async () => {
     if (!nlInput.trim()) {
@@ -27,6 +42,7 @@ export function ConfigCopilotView() {
     setIsGenerating(true);
     setDescribeResponse(null);
     setCommitResponse(null);
+    setEvidenceVerification(null);
 
     try {
       const response = await ConfigCopilotService.describe({
@@ -66,6 +82,7 @@ export function ConfigCopilotView() {
     }
 
     setIsCommitting(true);
+    setEvidenceVerification(null);
 
     try {
       const user = await spark.user();
@@ -108,6 +125,40 @@ export function ConfigCopilotView() {
     if (confidence >= 0.8) return 'text-success';
     if (confidence >= 0.6) return 'text-warning';
     return 'text-destructive';
+  };
+
+  const handleDownloadEvidence = async () => {
+    if (!commitResponse) {
+      toast.error('No evidence bundle available yet');
+      return;
+    }
+
+    try {
+      const evidenceKey = EvidenceKeys.configCopilotRun(commitResponse.commitId);
+      const bundle = await getEvidenceBundle<ConfigEvidence>(evidenceKey);
+
+      if (!bundle) {
+        toast.error('Evidence bundle not found in storage');
+        return;
+      }
+
+      const verification = await verifyEvidenceBundle(bundle);
+      const verified = verification.hashMatches && verification.signatureMatches;
+      setEvidenceVerification({
+        status: verified ? 'verified' : 'invalid',
+        detail: verified ? 'Signature verified' : 'Signature mismatch detected',
+      });
+
+      if (!verified) {
+        toast.error('Evidence verification failed. Downloading anyway.');
+      }
+
+      downloadEvidenceBundle(bundle, `config-copilot-evidence-${commitResponse.commitId}.json`);
+      toast.success('Evidence bundle downloaded');
+    } catch (error) {
+      console.error('Failed to download evidence bundle', error);
+      toast.error('Failed to download evidence bundle');
+    }
   };
 
   return (
@@ -161,6 +212,7 @@ export function ConfigCopilotView() {
                   setCommitResponse(null);
                   setNlInput('');
                   setCommitMessage('');
+                  setEvidenceVerification(null);
                 }}
               >
                 Clear
@@ -391,6 +443,18 @@ export function ConfigCopilotView() {
                     Evidence pack written to: <code className="font-mono">evidence/config_copilot_runs/{commitResponse.commitId}</code>
                   </AlertDescription>
                 </Alert>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadEvidence}>
+                    <DownloadSimple weight="fill" className="h-4 w-4" />
+                    Download Evidence Bundle
+                  </Button>
+                  {evidenceVerification && (
+                    <Badge variant={evidenceVerification.status === 'verified' ? 'default' : 'destructive'}>
+                      {evidenceVerification.detail}
+                    </Badge>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}

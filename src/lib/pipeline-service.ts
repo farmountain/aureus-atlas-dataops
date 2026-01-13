@@ -2,6 +2,7 @@ import { AureusGuard } from './aureus-guard';
 import type { ActionContext } from './aureus-types';
 import type { PipelineSpec, Dataset, TestSpec, DQCheck, EvidencePack, UserRole } from './types';
 import { pipelineRateLimiter } from './rate-limiter';
+import { EvidenceKeys, storeEvidenceBundle } from './evidence-store';
 
 export type DeploymentStage = 'dev' | 'uat' | 'prod';
 
@@ -381,9 +382,7 @@ CROSS JOIN target_totals t;
     console.log('[PipelineService] Evidence pack created:', evidencePackId);
     console.log('[PipelineService] Evidence would be written to:', `${this.evidencePath}/${evidencePackId}/`);
 
-    if (typeof window !== 'undefined' && window.spark?.kv) {
-      await window.spark.kv.set(`evidence:${evidencePackId}`, evidencePack);
-    }
+    await storeEvidenceBundle(EvidenceKeys.pipelinePack(evidencePackId), evidencePack);
 
     return evidencePackId;
   }

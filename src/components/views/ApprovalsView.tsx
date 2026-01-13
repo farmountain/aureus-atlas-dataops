@@ -6,11 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle, XCircle, Clock, FileText, Warning, ShieldCheck } from '@phosphor-icons/react';
+import { CheckCircle, XCircle, Warning, ShieldCheck, DownloadSimple } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { ApprovalService, type ApprovalObject } from '@/lib/approval-service';
 import { AureusGuard } from '@/lib/aureus-guard';
 import { PolicyEvaluator } from '@/lib/policy-evaluator';
+import { EvidenceKeys, downloadEvidenceBundle, getEvidenceBundle, verifyEvidenceBundle } from '@/lib/evidence-store';
 import type { ApprovalRequest, UserRole } from '@/lib/types';
 import { RiskLevelBadge, ApprovalStatusBadge } from '../badges/StatusBadges';
 
@@ -24,6 +25,10 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useKV<UserRole>('user_role', 'analyst');
   const [storedApprovals, setStoredApprovals] = useKV<ApprovalObject[]>('approval_objects', []);
+  const [evidenceVerification, setEvidenceVerification] = useState<null | {
+    status: 'verified' | 'invalid';
+    detail: string;
+  }>(null);
 
   const approvalService = useMemo(() => {
     const guard = new AureusGuard(
@@ -53,6 +58,48 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
     const interval = setInterval(syncToKV, 2000);
     return () => clearInterval(interval);
   }, [approvalService, setStoredApprovals]);
+
+  useEffect(() => {
+    setEvidenceVerification(null);
+  }, [selectedApproval]);
+
+  const handleDownloadEvidence = async () => {
+    if (!selectedApproval) return;
+
+    const stage =
+      selectedApproval.status === 'pending'
+        ? 'request'
+        : selectedApproval.status === 'approved'
+          ? 'approved_and_executed'
+          : 'rejected';
+
+    try {
+      const evidenceKey = EvidenceKeys.approvalPack(selectedApproval.evidencePackId, stage);
+      const bundle = await getEvidenceBundle(evidenceKey);
+
+      if (!bundle) {
+        toast.error('Evidence bundle not found in storage');
+        return;
+      }
+
+      const verification = await verifyEvidenceBundle(bundle);
+      const verified = verification.hashMatches && verification.signatureMatches;
+      setEvidenceVerification({
+        status: verified ? 'verified' : 'invalid',
+        detail: verified ? 'Signature verified' : 'Signature mismatch detected',
+      });
+
+      if (!verified) {
+        toast.error('Evidence verification failed. Downloading anyway.');
+      }
+
+      downloadEvidenceBundle(bundle, `approval-evidence-${selectedApproval.evidencePackId}-${stage}.json`);
+      toast.success('Evidence bundle downloaded');
+    } catch (error) {
+      console.error('Failed to download evidence bundle', error);
+      toast.error('Failed to download evidence bundle');
+    }
+  };
 
   const handleApprove = async () => {
     if (!selectedApproval) return;
@@ -303,10 +350,17 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
 
                 <div>
                   <div className="text-sm font-semibold mb-3">Evidence Pack</div>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <FileText weight="fill" className="h-4 w-4" />
-                    View Complete Evidence Pack
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadEvidence}>
+                      <DownloadSimple weight="fill" className="h-4 w-4" />
+                      Download Evidence Bundle
+                    </Button>
+                    {evidenceVerification && (
+                      <Badge variant={evidenceVerification.status === 'verified' ? 'default' : 'destructive'}>
+                        {evidenceVerification.detail}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 <div>
