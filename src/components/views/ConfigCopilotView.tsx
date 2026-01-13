@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,8 @@ import {
   type ConfigCommitResponse,
   type ConfigEvidence
 } from '@/lib/config-copilot';
+import type { Dataset } from '@/lib/types';
+import type { ConfigCopilotPrefill } from '@/lib/config-copilot-onboarding';
 import {
   EvidenceKeys,
   downloadEvidenceBundle,
@@ -20,18 +22,38 @@ import {
   verifyEvidenceBundle
 } from '@/lib/evidence-store';
 import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
 
-export function ConfigCopilotView() {
+interface ConfigCopilotViewProps {
+  prefill?: ConfigCopilotPrefill | null;
+  onDatasetRegistered?: (dataset: Dataset) => void;
+}
+
+export function ConfigCopilotView({ prefill, onDatasetRegistered }: ConfigCopilotViewProps) {
   const [nlInput, setNlInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [describeResponse, setDescribeResponse] = useState<ConfigDescribeResponse | null>(null);
   const [commitResponse, setCommitResponse] = useState<ConfigCommitResponse | null>(null);
   const [commitMessage, setCommitMessage] = useState('');
+  const [describeContext, setDescribeContext] = useState(prefill?.context ?? {});
   const [evidenceVerification, setEvidenceVerification] = useState<null | {
     status: 'verified' | 'invalid';
     detail: string;
   }>(null);
+  const appliedPrefillId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (prefill && prefill.id !== appliedPrefillId.current) {
+      setNlInput(prefill.nlInput);
+      setCommitMessage(prefill.commitMessage);
+      setDescribeContext(prefill.context ?? {});
+      setDescribeResponse(null);
+      setCommitResponse(null);
+      setEvidenceVerification(null);
+      appliedPrefillId.current = prefill.id;
+    }
+  }, [prefill]);
 
   const handleDescribe = async () => {
     if (!nlInput.trim()) {
@@ -47,7 +69,7 @@ export function ConfigCopilotView() {
     try {
       const response = await ConfigCopilotService.describe({
         nlInput: nlInput.trim(),
-        context: {}
+        context: describeContext ?? {}
       });
 
       setDescribeResponse(response);
@@ -110,6 +132,27 @@ export function ConfigCopilotView() {
           auditLogRefs: [response.auditEventId],
           actor: user.email || user.login
         });
+
+        if (describeResponse.drafts.datasetContract) {
+          const datasetContract = describeResponse.drafts.datasetContract;
+          const dataset: Dataset = {
+            id: uuidv4(),
+            name: datasetContract.name,
+            domain: datasetContract.domain,
+            owner: datasetContract.owner,
+            description: datasetContract.description,
+            schema: datasetContract.schema,
+            piiLevel: datasetContract.piiLevel,
+            jurisdiction: datasetContract.jurisdiction,
+            freshnessSLA: datasetContract.freshnessSLA,
+            lastRefresh: new Date().toISOString(),
+            tags: datasetContract.tags ?? []
+          };
+          onDatasetRegistered?.(dataset);
+          toast.success(`Dataset ${dataset.name} added to catalog`);
+        } else {
+          toast.warning('No dataset contract found to register in the catalog');
+        }
       } else {
         toast.error('Commit failed: ' + (response.errors?.join(', ') || 'Unknown error'));
       }
@@ -212,6 +255,7 @@ export function ConfigCopilotView() {
                   setCommitResponse(null);
                   setNlInput('');
                   setCommitMessage('');
+                  setDescribeContext({});
                   setEvidenceVerification(null);
                 }}
               >

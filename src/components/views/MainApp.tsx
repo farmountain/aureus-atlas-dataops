@@ -12,15 +12,36 @@ import { ObservabilityView } from './ObservabilityView';
 import type { Dataset, ApprovalRequest, PipelineSpec } from '@/lib/types';
 import type { QueryAskResponse } from '@/lib/query-service';
 import { SAMPLE_DATASETS, SAMPLE_APPROVALS } from '@/lib/mockData';
+import type { ConfigCopilotPrefill } from '@/lib/config-copilot-onboarding';
 
 export default function App() {
-  const [datasets] = useKV<Dataset[]>('datasets', SAMPLE_DATASETS);
+  const [datasets, setDatasets] = useKV<Dataset[]>('datasets', SAMPLE_DATASETS);
   const [approvals] = useKV<ApprovalRequest[]>('approvals', SAMPLE_APPROVALS);
   const [queryHistory, setQueryHistory] = useKV<QueryAskResponse[]>('query_history', []);
   const [pipelines, setPipelines] = useKV<PipelineSpec[]>('pipelines', []);
   const [activeTab, setActiveTab] = useState('query');
+  const [copilotPrefill, setCopilotPrefill] = useState<ConfigCopilotPrefill | null>(null);
 
   const pendingApprovals = (approvals || []).filter(a => a.status === 'pending');
+  const datasetList = datasets || [];
+
+  const handleStartOnboarding = (prefill: ConfigCopilotPrefill) => {
+    setCopilotPrefill(prefill);
+    setActiveTab('config');
+  };
+
+  const handleDatasetRegistered = (dataset: Dataset) => {
+    setDatasets((prev) => {
+      const current = prev || [];
+      const existingIndex = current.findIndex((item) => item.name === dataset.name || item.id === dataset.id);
+      if (existingIndex >= 0) {
+        const updated = [...current];
+        updated[existingIndex] = { ...current[existingIndex], ...dataset };
+        return updated;
+      }
+      return [...current, dataset];
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -37,7 +58,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Datasets:</span>
-              <span className="font-semibold text-foreground">{(datasets || []).length}</span>
+              <span className="font-semibold text-foreground">{datasetList.length}</span>
               <span className="text-muted-foreground ml-4">Pending Approvals:</span>
               <span className="font-semibold text-warning">{pendingApprovals.length}</span>
             </div>
@@ -85,26 +106,26 @@ export default function App() {
 
           <TabsContent value="query" className="mt-0">
             <QueryView 
-              datasets={datasets || []}
+              datasets={datasetList}
               queryHistory={queryHistory || []}
               setQueryHistory={setQueryHistory}
             />
           </TabsContent>
 
           <TabsContent value="datasets" className="mt-0">
-            <DatasetsView datasets={datasets || []} />
+            <DatasetsView datasets={datasetList} onStartOnboarding={handleStartOnboarding} />
           </TabsContent>
 
           <TabsContent value="pipelines" className="mt-0">
             <PipelinesView 
-              datasets={datasets || []}
+              datasets={datasetList}
               pipelines={pipelines || []}
               setPipelines={setPipelines}
             />
           </TabsContent>
 
           <TabsContent value="config" className="mt-0">
-            <ConfigCopilotView />
+            <ConfigCopilotView prefill={copilotPrefill} onDatasetRegistered={handleDatasetRegistered} />
           </TabsContent>
 
           <TabsContent value="approvals" className="mt-0">

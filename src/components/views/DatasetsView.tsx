@@ -2,24 +2,108 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { DatasetCard } from '../dataset/DatasetCard';
-import { Database, Plus, MagnifyingGlass } from '@phosphor-icons/react';
-import type { Dataset } from '@/lib/types';
+import { Database, Plus, MagnifyingGlass, Sparkle } from '@phosphor-icons/react';
+import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
+import type { Dataset, Domain, Jurisdiction, PIILevel } from '@/lib/types';
+import { DOMAINS } from '@/lib/mockData';
+import {
+  buildDatasetCommitMessage,
+  buildDatasetOnboardingPrompt,
+  DEFAULT_ONBOARDING_DETAILS,
+  type ConfigCopilotPrefill,
+  type DatasetOnboardingDetails
+} from '@/lib/config-copilot-onboarding';
 
 interface DatasetsViewProps {
   datasets: Dataset[];
+  onStartOnboarding?: (prefill: ConfigCopilotPrefill) => void;
 }
 
-export function DatasetsView({ datasets }: DatasetsViewProps) {
+const PII_LEVELS: Array<{ value: PIILevel; label: string }> = [
+  { value: 'none', label: 'None' },
+  { value: 'low', label: 'Low' },
+  { value: 'high', label: 'High' }
+];
+
+const JURISDICTIONS: Array<{ value: Jurisdiction; label: string }> = [
+  { value: 'US', label: 'US' },
+  { value: 'EU', label: 'EU' },
+  { value: 'UK', label: 'UK' },
+  { value: 'APAC', label: 'APAC' },
+  { value: 'multi', label: 'Multi' }
+];
+
+export function DatasetsView({ datasets, onStartOnboarding }: DatasetsViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDataset, setSelectedDataset] = useState<Dataset | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingDetails, setOnboardingDetails] = useState<DatasetOnboardingDetails>(DEFAULT_ONBOARDING_DETAILS);
+  const [tagsInput, setTagsInput] = useState('');
 
   const filteredDatasets = datasets.filter(ds =>
     ds.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     ds.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     ds.domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleOnboardSubmit = () => {
+    if (!onStartOnboarding) {
+      return;
+    }
+
+    const name = onboardingDetails.name.trim();
+    const owner = onboardingDetails.owner.trim();
+
+    if (!name) {
+      toast.error('Dataset name is required');
+      return;
+    }
+
+    if (!owner || !owner.includes('@')) {
+      toast.error('Owner email is required');
+      return;
+    }
+
+    const tags = tagsInput
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean);
+
+    const details: DatasetOnboardingDetails = {
+      ...onboardingDetails,
+      name,
+      owner,
+      description: onboardingDetails.description?.trim() || undefined,
+      tags
+    };
+
+    const prefill: ConfigCopilotPrefill = {
+      id: uuidv4(),
+      nlInput: buildDatasetOnboardingPrompt(details),
+      commitMessage: buildDatasetCommitMessage(details.name),
+      context: {
+        domain: details.domain,
+        existingDatasets: datasets.map(dataset => dataset.name),
+      },
+      datasetDetails: details
+    };
+
+    onStartOnboarding(prefill);
+    setOnboardingOpen(false);
+    setOnboardingDetails(DEFAULT_ONBOARDING_DETAILS);
+    setTagsInput('');
+  };
 
   return (
     <div className="space-y-6">
@@ -35,7 +119,7 @@ export function DatasetsView({ datasets }: DatasetsViewProps) {
                 Browse and manage governed datasets across all banking domains
               </CardDescription>
             </div>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => setOnboardingOpen(true)}>
               <Plus weight="bold" className="h-5 w-5" />
               Onboard Dataset
             </Button>
@@ -150,6 +234,130 @@ export function DatasetsView({ datasets }: DatasetsViewProps) {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={onboardingOpen} onOpenChange={setOnboardingOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Onboard Dataset via Config Copilot</DialogTitle>
+            <DialogDescription>
+              Provide the dataset specifics to prefill Config Copilot with a tailored template.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Dataset Name</label>
+              <Input
+                placeholder="customer_transactions"
+                value={onboardingDetails.name}
+                onChange={(e) => setOnboardingDetails((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Owner Email</label>
+              <Input
+                placeholder="owner@bank.com"
+                value={onboardingDetails.owner}
+                onChange={(e) => setOnboardingDetails((prev) => ({ ...prev, owner: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Domain</label>
+              <Select
+                value={onboardingDetails.domain}
+                onValueChange={(value: Domain) => setOnboardingDetails((prev) => ({ ...prev, domain: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select domain" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOMAINS.map((domain) => (
+                    <SelectItem key={domain.value} value={domain.value}>
+                      {domain.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">PII Level</label>
+              <Select
+                value={onboardingDetails.piiLevel}
+                onValueChange={(value: PIILevel) => setOnboardingDetails((prev) => ({ ...prev, piiLevel: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select PII level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PII_LEVELS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Jurisdiction</label>
+              <Select
+                value={onboardingDetails.jurisdiction}
+                onValueChange={(value: Jurisdiction) => setOnboardingDetails((prev) => ({ ...prev, jurisdiction: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select jurisdiction" />
+                </SelectTrigger>
+                <SelectContent>
+                  {JURISDICTIONS.map((jurisdiction) => (
+                    <SelectItem key={jurisdiction.value} value={jurisdiction.value}>
+                      {jurisdiction.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Freshness SLA (hours)</label>
+              <Input
+                type="number"
+                min={1}
+                value={onboardingDetails.freshnessSLA ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setOnboardingDetails((prev) => ({
+                    ...prev,
+                    freshnessSLA: value ? Number(value) : undefined
+                  }));
+                }}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Description</label>
+            <Textarea
+              placeholder="Describe the dataset purpose and contents..."
+              value={onboardingDetails.description ?? ''}
+              onChange={(e) => setOnboardingDetails((prev) => ({ ...prev, description: e.target.value }))}
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Tags</label>
+            <Input
+              placeholder="risk, regulatory, transactions"
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOnboardingOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleOnboardSubmit} className="gap-2">
+              <Sparkle weight="fill" className="h-4 w-4" />
+              Open Config Copilot
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
