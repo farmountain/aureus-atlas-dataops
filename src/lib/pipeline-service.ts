@@ -3,6 +3,7 @@ import type { ActionContext } from './aureus-types';
 import type { PipelineSpec, Dataset, TestSpec, DQCheck, EvidencePack, UserRole } from './types';
 import { pipelineRateLimiter } from './rate-limiter';
 import { EvidenceKeys, storeEvidenceBundle } from './evidence-store';
+import { ApprovalService } from './approval-service';
 
 export type DeploymentStage = 'dev' | 'uat' | 'prod';
 
@@ -54,10 +55,12 @@ export class PipelineService {
   private guard: AureusGuard;
   private datasets: Dataset[];
   private evidencePath = '/evidence/pipeline_runs';
+  private approvalService: ApprovalService;
 
   constructor(guard: AureusGuard, datasets: Dataset[]) {
     this.guard = guard;
     this.datasets = datasets;
+    this.approvalService = new ApprovalService(guard);
   }
 
   async generatePipeline(request: PipelineGenerationRequest): Promise<GeneratedPipeline> {
@@ -266,10 +269,28 @@ CROSS JOIN target_totals t;
 
     if (!policyCheck.allow && policyCheck.requiresApproval) {
       console.log('[PipelineService] Deployment requires approval');
+      const approval = await this.approvalService.requestApproval({
+        actionType: 'prod_deploy',
+        requester: request.actor,
+        requesterRole: request.role,
+        description: `Pipeline deployment to ${request.stage} requires approval`,
+        actionPayload: {
+          pipelineId: request.pipelineId,
+          stage: request.stage,
+          pipelineSpec: generated.spec,
+          sqlModel: generated.sqlModel,
+          tests: {
+            schema: generated.schemaTest,
+            dq: generated.dqTests,
+            reconciliation: generated.reconciliationTest,
+          },
+        },
+        actionContext: context,
+      });
       return {
         success: false,
         requiresApproval: true,
-        error: policyCheck.reason,
+        error: `${policyCheck.reason} (approval ${approval.id})`,
       };
     }
 

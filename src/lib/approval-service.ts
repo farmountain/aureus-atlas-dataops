@@ -1,6 +1,7 @@
+import { useKV } from '@github/spark/hooks';
 import { AureusGuard } from './aureus-guard';
 import { PolicyEvaluator } from './policy-evaluator';
-import type { ApprovalRequest, UserRole } from './types';
+import type { UserRole } from './types';
 import type { ActionContext, AuditEvent, Snapshot, Environment } from './aureus-types';
 import { EvidenceKeys, storeEvidenceBundle, type ApprovalEvidenceStage } from './evidence-store';
 
@@ -10,6 +11,32 @@ export type ApprovalActionType =
   | 'prod_deploy' 
   | 'policy_change' 
   | 'pii_access_high';
+
+const APPROVAL_QUEUE_KEY = 'approval_queue';
+
+const canUseKV = () => typeof window !== 'undefined' && !!window.spark?.kv;
+
+const readApprovalQueue = async (): Promise<ApprovalObject[]> => {
+  if (!canUseKV()) return [];
+  return (await window.spark.kv.get<ApprovalObject[]>(APPROVAL_QUEUE_KEY)) || [];
+};
+
+const writeApprovalQueue = async (approvals: ApprovalObject[]): Promise<void> => {
+  if (!canUseKV()) return;
+  await window.spark.kv.set(APPROVAL_QUEUE_KEY, approvals);
+};
+
+const upsertApprovalQueue = async (approval: ApprovalObject): Promise<void> => {
+  const approvals = await readApprovalQueue();
+  const existingIndex = approvals.findIndex(item => item.id === approval.id);
+  const nextApprovals =
+    existingIndex >= 0
+      ? approvals.map(item => (item.id === approval.id ? approval : item))
+      : [approval, ...approvals];
+  await writeApprovalQueue(nextApprovals);
+};
+
+export const useApprovalQueue = () => useKV<ApprovalObject[]>(APPROVAL_QUEUE_KEY, []);
 
 export interface ApprovalObject {
   id: string;
@@ -130,6 +157,7 @@ export class ApprovalService {
     };
 
     this.approvals.set(approvalId, approval);
+    await upsertApprovalQueue(approval);
 
     await this.writeEvidencePack(approval, 'request');
 
@@ -194,6 +222,7 @@ export class ApprovalService {
     await this.writeEvidencePack(approval, 'approved_and_executed', executionResult);
 
     console.log(`[ApprovalService] Approved and executed ${approvalId} by ${approver}`);
+    await upsertApprovalQueue(approval);
 
     return {
       success: true,
@@ -253,6 +282,7 @@ export class ApprovalService {
     });
 
     approval.auditEventIds.push(rejectionAuditEvent.auditEventId);
+    await upsertApprovalQueue(approval);
 
     await this.writeEvidencePack(approval, 'rejected');
 
@@ -365,5 +395,10 @@ export class ApprovalService {
 
   clearApprovals(): void {
     this.approvals.clear();
+    void writeApprovalQueue([]);
+  }
+
+  loadApprovals(approvals: ApprovalObject[]): void {
+    this.approvals = new Map(approvals.map(approval => [approval.id, approval]));
   }
 }

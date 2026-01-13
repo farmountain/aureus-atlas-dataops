@@ -13,9 +13,13 @@ import {
   validatePolicies,
   validateSLAs 
 } from './config-schemas';
-import type { AuditEvent } from './types';
+import type { AuditEvent, UserRole } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { EvidenceKeys, getEvidenceBundle, storeEvidenceBundle } from './evidence-store';
+import { AureusGuard } from './aureus-guard';
+import { PolicyEvaluator } from './policy-evaluator';
+import type { ActionContext, GuardConfig } from './aureus-types';
+import { ApprovalService } from './approval-service';
 
 export interface ConfigDescribeRequest {
   nlInput: string;
@@ -41,6 +45,8 @@ export interface ConfigCommitRequest {
   drafts: ConfigDrafts;
   commitMessage: string;
   actor: string;
+  role: UserRole;
+  environment?: GuardConfig['environment'];
 }
 
 export interface ConfigCommitResponse {
@@ -363,6 +369,7 @@ Return ONLY a valid JSON object with a single "slas" property containing an arra
     const timestamp = new Date().toISOString();
     const filesWritten: string[] = [];
     const errors: string[] = [];
+    const environment = request.environment ?? 'prod';
 
     const validationResult = validateAllSpecs(request.drafts);
 
@@ -380,6 +387,70 @@ Return ONLY a valid JSON object with a single "slas" property containing an arra
     }
 
     try {
+      const guardConfig: GuardConfig = {
+        environment,
+        budgetLimits: {
+          tokenBudget: 10000,
+          queryCostBudget: 1000,
+        },
+        enableAudit: true,
+        enableSnapshots: true,
+      };
+      const guard = new AureusGuard(guardConfig, new PolicyEvaluator());
+      const approvalService = new ApprovalService(guard);
+      const datasetContract = request.drafts.datasetContract;
+      const policyContext: ActionContext = {
+        actionType: 'config.commit',
+        actor: request.actor,
+        role: request.role,
+        environment,
+        metadata: {
+          domain: datasetContract?.domain,
+          piiLevel: datasetContract?.piiLevel,
+          requestId: request.requestId,
+        },
+      };
+
+      const policyCheck = await guard.checkPolicy(policyContext);
+      if (!policyCheck.allow && policyCheck.requiresApproval) {
+        const approval = await approvalService.requestApproval({
+          actionType: 'policy_change',
+          requester: request.actor,
+          requesterRole: request.role,
+          description: `Config commit requires approval: ${request.commitMessage}`,
+          actionPayload: {
+            requestId: request.requestId,
+            commitMessage: request.commitMessage,
+            drafts: request.drafts,
+          },
+          actionContext: policyContext,
+        });
+
+        return {
+          commitId,
+          timestamp,
+          filesWritten: [],
+          validationResult,
+          auditEventId: '',
+          snapshotId: '',
+          status: 'failed',
+          errors: [`Approval required (${approval.id}): ${policyCheck.reason}`],
+        };
+      }
+
+      if (!policyCheck.allow) {
+        return {
+          commitId,
+          timestamp,
+          filesWritten: [],
+          validationResult,
+          auditEventId: '',
+          snapshotId: '',
+          status: 'failed',
+          errors: [policyCheck.reason],
+        };
+      }
+
       const baseKey = `specs/${commitId}`;
       
       if (request.drafts.datasetContract) {

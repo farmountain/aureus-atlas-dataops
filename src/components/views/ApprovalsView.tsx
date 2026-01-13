@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useKV } from '@github/spark/hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,27 +8,26 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle, XCircle, Warning, ShieldCheck, DownloadSimple } from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import { ApprovalService, type ApprovalObject } from '@/lib/approval-service';
+import { ApprovalService, type ApprovalObject, useApprovalQueue } from '@/lib/approval-service';
 import { AureusGuard } from '@/lib/aureus-guard';
 import { PolicyEvaluator } from '@/lib/policy-evaluator';
 import { EvidenceKeys, downloadEvidenceBundle, getEvidenceBundle, verifyEvidenceBundle } from '@/lib/evidence-store';
-import type { ApprovalRequest, UserRole } from '@/lib/types';
+import type { UserRole } from '@/lib/types';
 import { RiskLevelBadge, ApprovalStatusBadge } from '../badges/StatusBadges';
 
-interface ApprovalsViewProps {
-  approvals: ApprovalRequest[];
-}
-
-export function ApprovalsView({ approvals }: ApprovalsViewProps) {
-  const [selectedApproval, setSelectedApproval] = useState<ApprovalRequest | null>(null);
+export function ApprovalsView() {
+  const [selectedApproval, setSelectedApproval] = useState<ApprovalObject | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useKV<UserRole>('user_role', 'analyst');
-  const [storedApprovals, setStoredApprovals] = useKV<ApprovalObject[]>('approval_objects', []);
+  const [approvalQueue, setApprovalQueue] = useApprovalQueue();
   const [evidenceVerification, setEvidenceVerification] = useState<null | {
     status: 'verified' | 'invalid';
     detail: string;
   }>(null);
+  const payloadRef = useRef<HTMLDivElement | null>(null);
+  const evidenceRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<'payload' | 'evidence' | null>(null);
 
   const approvalService = useMemo(() => {
     const guard = new AureusGuard(
@@ -40,41 +39,34 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
       },
       new PolicyEvaluator()
     );
-    const service = new ApprovalService(guard);
-    
-    (storedApprovals || []).forEach(approval => {
-      service['approvals'].set(approval.id, approval);
-    });
-    
-    return service;
+    return new ApprovalService(guard);
   }, []);
 
   useEffect(() => {
-    const syncToKV = () => {
-      const allApprovals = approvalService.getAllApprovals();
-      setStoredApprovals(allApprovals);
-    };
-    
-    const interval = setInterval(syncToKV, 2000);
-    return () => clearInterval(interval);
-  }, [approvalService, setStoredApprovals]);
+    approvalService.loadApprovals(approvalQueue || []);
+  }, [approvalQueue, approvalService]);
 
   useEffect(() => {
     setEvidenceVerification(null);
   }, [selectedApproval]);
 
-  const handleDownloadEvidence = async () => {
-    if (!selectedApproval) return;
+  useEffect(() => {
+    if (!selectedApproval || !scrollTarget) return;
+    const target = scrollTarget === 'payload' ? payloadRef.current : evidenceRef.current;
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setScrollTarget(null);
+  }, [selectedApproval, scrollTarget]);
 
+  const handleDownloadEvidence = async (approval: ApprovalObject) => {
     const stage =
-      selectedApproval.status === 'pending'
+      approval.status === 'PENDING'
         ? 'request'
-        : selectedApproval.status === 'approved'
+        : approval.status === 'APPROVED'
           ? 'approved_and_executed'
           : 'rejected';
 
     try {
-      const evidenceKey = EvidenceKeys.approvalPack(selectedApproval.evidencePackId, stage);
+      const evidenceKey = EvidenceKeys.approvalPack(approval.evidencePackId, stage);
       const bundle = await getEvidenceBundle(evidenceKey);
 
       if (!bundle) {
@@ -93,7 +85,7 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
         toast.error('Evidence verification failed. Downloading anyway.');
       }
 
-      downloadEvidenceBundle(bundle, `approval-evidence-${selectedApproval.evidencePackId}-${stage}.json`);
+      downloadEvidenceBundle(bundle, `approval-evidence-${approval.evidencePackId}-${stage}.json`);
       toast.success('Evidence bundle downloaded');
     } catch (error) {
       console.error('Failed to download evidence bundle', error);
@@ -113,14 +105,6 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
 
     setIsProcessing(true);
     try {
-      const approvalObj = approvalService.getApproval(selectedApproval.id);
-      
-      if (!approvalObj) {
-        toast.error('Approval not found in service');
-        setIsProcessing(false);
-        return;
-      }
-
       const result = await approvalService.approveAndExecute(
         selectedApproval.id,
         'current.user',
@@ -140,7 +124,7 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
       setApprovalComment('');
       
       const allApprovals = approvalService.getAllApprovals();
-      setStoredApprovals(allApprovals);
+      setApprovalQueue(allApprovals);
     } catch (error) {
       toast.error('Approval failed', {
         description: error instanceof Error ? error.message : 'Unknown error',
@@ -162,14 +146,6 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
 
     setIsProcessing(true);
     try {
-      const approvalObj = approvalService.getApproval(selectedApproval.id);
-      
-      if (!approvalObj) {
-        toast.error('Approval not found in service');
-        setIsProcessing(false);
-        return;
-      }
-
       await approvalService.reject(
         selectedApproval.id,
         'current.user',
@@ -185,7 +161,7 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
       setApprovalComment('');
       
       const allApprovals = approvalService.getAllApprovals();
-      setStoredApprovals(allApprovals);
+      setApprovalQueue(allApprovals);
     } catch (error) {
       toast.error('Rejection failed', {
         description: error instanceof Error ? error.message : 'Unknown error',
@@ -195,8 +171,11 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
     }
   };
 
-  const pendingApprovals = approvals.filter(a => a.status === 'pending');
-  const completedApprovals = approvals.filter(a => a.status !== 'pending');
+  const approvals = approvalQueue || [];
+  const pendingApprovals = approvals.filter(a => a.status === 'PENDING');
+  const completedApprovals = approvals.filter(a => a.status !== 'PENDING');
+  const approvalStatus = (status: ApprovalObject['status']) =>
+    status === 'PENDING' ? 'pending' : status === 'APPROVED' ? 'approved' : 'rejected';
 
   return (
     <div className="space-y-6">
@@ -265,12 +244,35 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                         {' • '}
                         {new Date(approval.timestamp).toLocaleString()}
                       </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-2">
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedApproval(approval);
+                            setScrollTarget('payload');
+                          }}
+                        >
+                          View Action Payload
+                        </Button>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDownloadEvidence(approval);
+                          }}
+                        >
+                          Download Evidence Pack
+                        </Button>
+                      </div>
                     </div>
                     <RiskLevelBadge level={approval.riskLevel} />
                   </div>
                   <div className="flex gap-2 mt-4">
-                    <Badge variant="outline">{approval.type.replace('_', ' ').toUpperCase()}</Badge>
-                    <ApprovalStatusBadge status={approval.status} />
+                    <Badge variant="outline">{approval.actionType.replace('_', ' ').toUpperCase()}</Badge>
+                    <ApprovalStatusBadge status={approvalStatus(approval.status)} />
                   </div>
                 </div>
               ))}
@@ -300,8 +302,27 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                       {approval.approver && `Decided by ${approval.approver} • `}
                       {approval.approvalTimestamp && new Date(approval.approvalTimestamp).toLocaleString()}
                     </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-2">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedApproval(approval);
+                          setScrollTarget('payload');
+                        }}
+                      >
+                        View Action Payload
+                      </Button>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => handleDownloadEvidence(approval)}
+                      >
+                        Download Evidence Pack
+                      </Button>
+                    </div>
                   </div>
-                  <ApprovalStatusBadge status={approval.status} />
+                  <ApprovalStatusBadge status={approvalStatus(approval.status)} />
                 </div>
               ))}
             </div>
@@ -335,7 +356,7 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                 <div>
                   <div className="text-sm font-semibold mb-3">Request Details</div>
                   <div className="space-y-2 text-sm">
-                    {Object.entries(selectedApproval.details).map(([key, value]) => (
+                    {Object.entries(selectedApproval.actionContext.metadata || {}).map(([key, value]) => (
                       <div key={key} className="flex gap-2">
                         <span className="text-muted-foreground min-w-[150px]">
                           {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
@@ -348,10 +369,10 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                   </div>
                 </div>
 
-                <div>
+                <div ref={evidenceRef}>
                   <div className="text-sm font-semibold mb-3">Evidence Pack</div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadEvidence}>
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => handleDownloadEvidence(selectedApproval)}>
                       <DownloadSimple weight="fill" className="h-4 w-4" />
                       Download Evidence Bundle
                     </Button>
@@ -360,6 +381,13 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                         {evidenceVerification.detail}
                       </Badge>
                     )}
+                  </div>
+                </div>
+
+                <div ref={payloadRef}>
+                  <div className="text-sm font-semibold mb-3">Action Payload</div>
+                  <div className="rounded-md border bg-muted/30 p-4 text-xs font-mono whitespace-pre-wrap">
+                    {JSON.stringify(selectedApproval.actionPayload, null, 2)}
                   </div>
                 </div>
 

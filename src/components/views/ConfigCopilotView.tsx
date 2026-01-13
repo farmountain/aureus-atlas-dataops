@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useKV } from '@github/spark/hooks';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import {
   verifyEvidenceBundle
 } from '@/lib/evidence-store';
 import { toast } from 'sonner';
+import type { UserRole } from '@/lib/types';
 
 export function ConfigCopilotView() {
   const [nlInput, setNlInput] = useState('');
@@ -32,6 +34,7 @@ export function ConfigCopilotView() {
     status: 'verified' | 'invalid';
     detail: string;
   }>(null);
+  const [currentUserRole] = useKV<UserRole>('user_role', 'analyst');
 
   const handleDescribe = async () => {
     if (!nlInput.trim()) {
@@ -91,7 +94,8 @@ export function ConfigCopilotView() {
         requestId: describeResponse.requestId,
         drafts: describeResponse.drafts,
         commitMessage: commitMessage.trim(),
-        actor: user.email || user.login
+        actor: user.email || user.login,
+        role: currentUserRole || 'analyst'
       });
 
       setCommitResponse(response);
