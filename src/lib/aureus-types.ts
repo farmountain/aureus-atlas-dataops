@@ -101,6 +101,7 @@ export interface ExecutionResult {
   success: boolean;
   auditEventId: string;
   snapshotId?: string;
+  policyDecisions?: PolicyDecision[];
   data?: unknown;
   error?: string;
 }

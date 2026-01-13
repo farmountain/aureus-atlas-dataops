@@ -9,6 +9,7 @@ import type {
   ExecutionRequest,
   ExecutionResult,
   BudgetUsage,
+  PolicyDecision,
 } from './aureus-types';
 
 export class AureusGuard {
@@ -78,28 +79,33 @@ export class AureusGuard {
     console.log('[AureusGuard] Budget reset');
   }
 
-  async checkPolicy(context: ActionContext): Promise<{ allow: boolean; requiresApproval: boolean; reason: string }> {
+  async checkPolicy(
+    context: ActionContext
+  ): Promise<{ allow: boolean; requiresApproval: boolean; reason: string; decisions: PolicyDecision[] }> {
     this.setState('validating');
 
     const evaluation = this.policyEvaluator.evaluateAll(context);
+    const decisions = evaluation.decisions;
 
     if (!evaluation.allow && !evaluation.requiresApproval) {
       this.setState('blocked');
-      const blockingDecisions = evaluation.decisions.filter(d => !d.allow && !d.requiresApproval);
+      const blockingDecisions = decisions.filter(d => !d.allow && !d.requiresApproval);
       return {
         allow: false,
         requiresApproval: false,
         reason: blockingDecisions.map(d => d.reason).join('; '),
+        decisions,
       };
     }
 
     if (evaluation.requiresApproval) {
       this.setState('blocked');
-      const approvalDecisions = evaluation.decisions.filter(d => d.requiresApproval);
+      const approvalDecisions = decisions.filter(d => d.requiresApproval);
       return {
         allow: false,
         requiresApproval: true,
         reason: approvalDecisions.map(d => d.reason).join('; '),
+        decisions,
       };
     }
 
@@ -108,11 +114,23 @@ export class AureusGuard {
       allow: true,
       requiresApproval: false,
       reason: 'All policies passed',
+      decisions,
     };
   }
 
-  private createAuditEvent(context: ActionContext, outcome: 'success' | 'blocked' | 'requires_approval', snapshotId?: string): AuditEvent {
-    const primaryDecision = this.policyEvaluator.evaluateAll(context).decisions[0];
+  private createAuditEvent(
+    context: ActionContext,
+    outcome: 'success' | 'blocked' | 'requires_approval',
+    decisions: PolicyDecision[],
+    snapshotId?: string
+  ): AuditEvent {
+    const primaryDecision: PolicyDecision = decisions[0] ?? {
+      allow: true,
+      requiresApproval: false,
+      reason: 'No policy decisions available',
+      policyId: 'policy-evaluator',
+      policyName: 'Policy Evaluator',
+    };
     const auditEvent: AuditEvent = {
       id: this.generateId(),
       timestamp: new Date().toISOString(),
@@ -156,14 +174,16 @@ export class AureusGuard {
     const { context, payload } = request;
 
     const policyCheck = await this.checkPolicy(context);
+    const policyDecisions = policyCheck.decisions;
 
     if (!policyCheck.allow) {
       const outcome = policyCheck.requiresApproval ? 'requires_approval' : 'blocked';
-      const auditEvent = this.createAuditEvent(context, outcome);
+      const auditEvent = this.createAuditEvent(context, outcome, policyDecisions);
 
       return {
         success: false,
         auditEventId: auditEvent.id,
+        policyDecisions,
         error: policyCheck.reason,
       };
     }
@@ -173,10 +193,11 @@ export class AureusGuard {
 
     const budgetCheck = this.checkBudget(tokenCost, queryCost);
     if (!budgetCheck.withinBudget) {
-      const auditEvent = this.createAuditEvent(context, 'blocked');
+      const auditEvent = this.createAuditEvent(context, 'blocked', policyDecisions);
       return {
         success: false,
         auditEventId: auditEvent.id,
+        policyDecisions,
         error: budgetCheck.reason,
       };
     }
@@ -190,7 +211,7 @@ export class AureusGuard {
 
     this.incrementBudget(tokenCost, queryCost);
 
-    const auditEvent = this.createAuditEvent(context, 'success', snapshot.id);
+    const auditEvent = this.createAuditEvent(context, 'success', policyDecisions, snapshot.id);
 
     this.setState('completed');
 
@@ -198,6 +219,7 @@ export class AureusGuard {
       success: true,
       auditEventId: auditEvent.id,
       snapshotId: snapshot.id,
+      policyDecisions,
       data: payload,
     };
   }

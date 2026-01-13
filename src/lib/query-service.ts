@@ -128,8 +128,8 @@ export class QueryService {
       throw new Error(`Query blocked by policy: ${guardResult.error}`);
     }
 
-    const evaluation = this.aureusGuard['policyEvaluator'].evaluateAll(context);
-    const policyChecks: PolicyCheck[] = evaluation.decisions.map((d) => ({
+    const policyDecisions = guardResult.policyDecisions ?? [];
+    const policyChecks: PolicyCheck[] = policyDecisions.map((d) => ({
       policyId: d.policyId,
       policyName: d.policyName,
       result: d.allow ? 'allow' : d.requiresApproval ? 'require_approval' : 'block',
@@ -162,7 +162,7 @@ export class QueryService {
     }
 
     const results = await this.sandbox.execute(sql, requiredDatasets);
-    const maskingOutcome = applyPiiMasking(results, requiredDatasets, evaluation.decisions);
+    const maskingOutcome = applyPiiMasking(results, requiredDatasets, policyDecisions);
 
     const resultMetadata = this.calculateResultMetadata(
       maskingOutcome.maskedResults,
