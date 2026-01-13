@@ -3,6 +3,7 @@ import { AureusGuard } from './aureus-guard';
 import type { ActionContext } from './aureus-types';
 import { PostgresSandbox } from './postgres-sandbox';
 import { queryRateLimiter } from './rate-limiter';
+import { applyPiiMasking, type MaskedField, type MaskingPolicySummary } from './pii-masking';
 
 export interface QueryIntent {
   question: string;
@@ -57,6 +58,8 @@ export interface QueryAskResponse {
   citations: Citation[];
   freshnessChecks: FreshnessCheck[];
   results?: Array<Record<string, unknown>>;
+  maskedFields?: MaskedField[];
+  maskingPolicy?: MaskingPolicySummary;
   resultMetadata?: {
     rowCount: number;
     executionTimeMs: number;
@@ -159,8 +162,12 @@ export class QueryService {
     }
 
     const results = await this.sandbox.execute(sql, requiredDatasets);
+    const maskingOutcome = applyPiiMasking(results, requiredDatasets, evaluation.decisions);
 
-    const resultMetadata = this.calculateResultMetadata(results, Date.now() - new Date(timestamp).getTime());
+    const resultMetadata = this.calculateResultMetadata(
+      maskingOutcome.maskedResults,
+      Date.now() - new Date(timestamp).getTime()
+    );
 
     const lineageId = this.recordLineage({
       queryId,
@@ -179,7 +186,9 @@ export class QueryService {
       policyChecks,
       citations,
       freshnessChecks,
-      results,
+      results: maskingOutcome.maskedResults,
+      maskedFields: maskingOutcome.maskedFields,
+      maskingPolicy: maskingOutcome.policySummary,
       resultMetadata,
       lineageId,
       timestamp,
