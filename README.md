@@ -4,39 +4,204 @@ A bank-grade LLM-assisted data platform frontend demonstrating governed, evidenc
 
 ## Overview
 
-AUREUS is a **frontend demonstration** of a comprehensive governed data platform designed for banking and financial services. It showcases the complete user experience for:
+AUREUS is a **production-ready frontend demonstration** of a comprehensive governed data platform designed for banking and financial services. It showcases the complete user experience for:
 
 - **Natural Language Queries**: Ask data questions in plain English, get SQL + results + evidence
-- **Dataset Onboarding**: LLM-assisted data contract generation with governance checks
+- **Dataset Catalog & Onboarding**: Browse datasets, view metadata, LLM-assisted contract generation
 - **Pipeline Generation**: Transform data with auto-generated SQL, tests, and DQ checks
 - **Config Copilot**: Natural language → structured specs (contracts, DQ rules, policies, SLAs)
 - **Approval Workflows**: Human-in-the-loop governance for high-risk operations
+- **Guard Controls**: Real-time policy enforcement, audit trails, and rollback capabilities
+- **Observability**: Token tracking, query cost estimation, latency monitoring, budget controls
+
+## What Makes AUREUS Unique
+
+### Evidence-Gated Development (EGD)
+Every action produces verifiable evidence: policy checks, dataset lineage, generated artifacts, test results, approval trails.
+
+### AUREUS Guard Runtime
+- **Goal-Guard FSM**: State machine controlling all action progression
+- **Policy Engine**: 15+ pre-configured OPA-style policies
+- **Audit Log**: Immutable record of every action and decision
+- **Snapshots**: Rollback capability for all deployments
+- **Budget Enforcement**: Token limits, query costs, rate limits
+
+### Banking-Grade Governance
+- PII auto-detection and masking
+- Cross-jurisdiction controls
+- Role-based authorization (Analyst/Approver/Admin/Viewer)
+- High-risk action approval gates
+- Complete audit trails for regulatory compliance
+
+### Real LLM Integration
+- Uses Spark's `spark.llm()` API for production-quality generation
+- Generates dataset contracts, DQ rules, policies, SLAs from natural language
+- SQL generation with schema awareness
+- Multi-turn intent clarification
 
 ## Key Features
 
-### Evidence-Gated Development (EGD)
-Every action generates verifiable evidence including:
-- Policy compliance checks
-- Dataset lineage
-- Generated code artifacts
-- Test results
-- Approval trails
+### 1. Natural Language Query Engine
+**What it does**: Ask banking questions in plain English and get SQL + results + complete evidence trail
+- **LLM-powered intent analysis**: Extracts measures, dimensions, filters, time ranges from natural language
+- **Automatic dataset identification**: Matches query intent to appropriate datasets from catalog
+- **SQL generation with schema awareness**: Creates valid SQL using actual schema definitions
+- **Policy enforcement**: Checks PII access, jurisdiction rules, domain restrictions before execution
+- **Citation & lineage**: Every result shows which datasets were used and their freshness status
+- **Query history**: Persistent audit trail of all queries with replay capability
 
-### AUREUS Controls
-- **Goal-Guard FSM**: State machine governing action progression
-- **Policy Engine**: Simulated OPA-style policy evaluation
-- **Audit Log**: Immutable record of all actions
-- **Snapshots**: Rollback capability for deployments
-- **Approval Gates**: Required approvals for high-risk actions
+**Use cases**:
+- "What is the total outstanding balance for high-risk loans?"
+- "Show me AML alerts with risk score above 80"
+- "Calculate daily transaction volume by channel for the last 7 days"
 
-### Banking Domains
-Pre-configured domains reflecting real banking operations:
-- **Credit Risk**: Loan portfolios, risk ratings, exposure analysis
-- **AML/FCC**: Anti-money laundering alerts, compliance monitoring
-- **Finance/Reg Reporting**: Regulatory reports, financial statements
-- **Treasury/Markets**: Trading positions, market risk, liquidity
-- **Retail/Channels**: Customer transactions, account activity
-- **Operations/Service**: Operational metrics, service quality
+### 2. Dataset Catalog & Metadata Management
+**What it does**: Comprehensive registry of all governed datasets with rich metadata
+- **Dataset cards**: Schema, PII levels, jurisdiction, freshness SLA, owner, record counts
+- **Search & filter**: Find datasets by name, description, domain, or tags
+- **Schema browser**: View complete schema with field-level PII detection
+- **Governance indicators**: Visual badges for PII level, jurisdiction, freshness status
+- **Domain organization**: Pre-configured for 6 banking domains
+
+**Included datasets**:
+- `customer_transactions` - Retail banking (15M records, High PII, Multi-jurisdiction)
+- `loan_portfolio` - Credit risk (234K records, Low PII, US only)
+- `aml_alerts` - Compliance (8.9K records, High PII, US only)
+- `regulatory_reports` - Finance (1.2K records, No PII, Multi-jurisdiction)
+- `trading_positions` - Treasury (45K records, No PII, US only)
+
+### 3. Config Copilot - LLM-Assisted Specification Generation
+**What it does**: Transforms natural language descriptions into complete, validated governance specifications
+- **Four spec types generated**:
+  - **Dataset Contract**: Schema, PII classification, jurisdiction, retention policy, SLA
+  - **DQ Rules**: Completeness, uniqueness, validity, consistency, timeliness checks
+  - **Governance Policies**: Access control, data masking, approval workflows, purpose limitation
+  - **SLA Specifications**: Freshness, availability, quality, latency targets with alerting thresholds
+- **JSON Schema validation**: All specs validated against formal schemas with detailed error reporting
+- **AUREUS Guard integration**: Policy checks, audit logging, snapshot creation before commit
+- **Evidence generation**: Complete audit trail with spec diffs, validation results, policy decisions
+- **Version control**: All specs versioned and stored in `/specs/` directory
+
+**Sample input**:
+```
+I need a credit card transaction dataset with PII masking, 
+daily freshness, and fraud detection quality checks for 
+real-time monitoring in the US jurisdiction...
+```
+
+**Output**:
+- Dataset contract with 12+ fields, PII flags, retention rules
+- 5-8 DQ rules covering required checks
+- 3-5 governance policies (access, masking, approval)
+- Complete SLA definition with 4 target types
+
+### 4. Pipeline Generation & Management
+**What it does**: Auto-generate data transformation pipelines with SQL, tests, and DQ checks
+- **Pipeline specifications**: Source datasets, target dataset, transformation logic
+- **SQL model generation**: Production-ready SQL code with proper schema references
+- **Automated test creation**: Schema tests, DQ tests, reconciliation stubs
+- **Environment progression**: Dev → UAT → Prod with approval gates
+- **Snapshot & rollback**: Every deployment creates snapshot with rollback plan
+- **Evidence packs**: Generated files, test results, guard decisions all documented
+
+**Capabilities**:
+- View existing pipelines with metadata
+- Create new pipelines from specs
+- Deploy with approval workflow
+- Rollback to previous versions
+
+### 5. Approval Workflow System
+**What it does**: Human-in-the-loop governance for high-risk operations
+- **Role-based authorization**: Analyst, Approver, Admin, Viewer roles with different permissions
+- **Approval request tracking**: View all pending/approved/rejected requests
+- **Evidence review**: Complete context available before decision
+- **Risk level indicators**: High/Medium/Low risk classification
+- **Immutable audit trail**: All approval decisions logged permanently
+- **Execution on approval**: Approved actions execute with snapshot + audit event
+
+**Requires approval for**:
+- Production deployments (High risk)
+- Policy changes (High risk)
+- High PII dataset access (Medium risk)
+- Cross-border data operations (Medium risk)
+
+### 6. AUREUS Guard - Governance Runtime
+**What it does**: Real-time policy enforcement and state management
+- **Goal-Guard FSM**: State machine controlling action progression
+  - States: IDLE → INTENT_VALIDATION → POLICY_CHECK → EXECUTION → EVIDENCE_GEN → COMPLETE
+  - Violations trigger: BLOCKED → audit + notify
+- **Policy evaluation**: OPA-style policy engine with 15+ pre-configured policies
+- **Budget enforcement**: Token limits, query cost limits, rate limits
+- **Audit logging**: Every state transition logged with full context
+- **Snapshot management**: Immutable snapshots of all deployments
+- **Rollback capability**: Restore to any previous snapshot
+
+**Policy categories**:
+- PII access control (3 policies)
+- Cross-jurisdiction restrictions (2 policies)
+- Production write controls (3 policies)
+- High-risk action gates (4 policies)
+- Budget & rate limits (3 policies)
+
+### 7. Observability & Cost Controls
+**What it does**: Track usage, costs, and enforce budgets across all operations
+- **Token tracking**: Estimated + actual token usage per LLM call
+- **Query cost estimation**: Heuristic-based cost prediction for queries
+- **Latency monitoring**: Response time tracking for all operations
+- **Error tracking**: Categorized error logging with context
+- **Budget enforcement**: Block execution when budgets exceeded
+- **Metrics dashboard**: Real-time view of platform usage and health
+
+**Tracked metrics**:
+- Total tokens used (with budget enforcement)
+- Query count & costs (with per-query limits)
+- Average latency (with SLO targets)
+- Error rate (with alerting thresholds)
+- Policy violations (with audit trail)
+
+### 8. Evidence-Gated Development (EGD)
+**What it does**: Every significant action produces auditor-ready evidence
+- **Structured evidence packs**: JSON + Markdown for every operation
+- **Complete audit trail**: Inputs, outputs, policy decisions, approvals, timestamps
+- **Immutable storage**: Evidence cannot be modified after creation
+- **Tamper detection**: Cryptographic signatures (simulated in frontend)
+- **Evidence browser**: Search and view all historical evidence packs
+- **Export capability**: Download evidence for regulatory review
+
+**Evidence generated for**:
+- Query execution (SQL, results, policy checks, lineage)
+- Config generation (specs, validation results, commits)
+- Pipeline deployment (code, tests, approvals)
+- Approval decisions (requests, reviews, outcomes)
+- Policy violations (blocks, context, recommendations)
+
+### 9. Rate Limiting & Abuse Prevention
+**What it does**: Protect platform resources and enforce fair usage
+- **Per-user rate limits**: Isolated limits prevent one user blocking others
+- **Sliding window algorithm**: Smooth rate limiting with automatic cleanup
+- **Operation-specific limits**:
+  - Query execution: 10 requests / 60 seconds
+  - Pipeline deployment: 3 requests / 60 seconds
+  - Config generation: 5 requests / 60 seconds
+  - PII access: 5 requests / 60 seconds
+  - Approval requests: 20 requests / 60 seconds
+- **Descriptive errors**: Clear messages when limits exceeded
+- **Evidence logging**: Rate limit violations logged for audit
+
+### 10. Banking Domain Packs
+**What it does**: Pre-configured domain models for common banking use cases
+- **Domain taxonomy**: 6 core banking capability areas documented
+- **Sample data packs**: 3 complete demo scenarios with synthetic data
+- **Domain-specific glossaries**: Banking terms and definitions
+- **Pre-configured policies**: Domain-appropriate governance rules
+
+**Domains**:
+1. **Credit Risk**: Loan portfolios, risk ratings, exposure, PD/LGD/EAD calculations
+2. **AML/FCC**: Alert triage, SAR filing, transaction monitoring, KYC
+3. **Finance/Reg Reporting**: Regulatory reports, GL reconciliation, submissions
+4. **Treasury/Markets**: Trading positions, P&L, VaR, collateral management
+5. **Retail/Channels**: Customer transactions, account activity, channel analytics
+6. **Operations/Service**: Operational metrics, SLA monitoring, incident tracking
 
 ## Technology Stack
 
@@ -477,6 +642,39 @@ kubectl get pods -n aureus
 curl https://your-domain.com/health
 ```
 
+## Documentation Index
+
+### Product Documentation
+- 📋 **[FEATURES.md](./FEATURES.md)** - Complete feature catalog with examples
+- 📐 **[SOLUTION_ARCHITECTURE.md](./SOLUTION_ARCHITECTURE.md)** - Technical architecture and data flows
+- 🗺️ **[ROADMAP.md](./ROADMAP.md)** - Product roadmap and future enhancements
+- 📘 **[PRD.md](./PRD.md)** - Product requirements and design decisions
+
+### Technical Documentation
+- 🏗️ **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Detailed system architecture
+- 🔐 **[SECURITY.md](./SECURITY.md)** - Security controls and hardening
+- ⚠️ **[THREAT_MODEL.md](./THREAT_MODEL.md)** - Threat analysis (STRIDE)
+- 🛡️ **[GUARD_DOCS_INDEX.md](./GUARD_DOCS_INDEX.md)** - AUREUS Guard documentation
+
+### Operational Documentation
+- 🚀 **[Deployment Guide](./docs/deployment-guide.md)** - Complete deployment procedures
+- 🚨 **[Incident Response](./runbooks/incident-response.md)** - Emergency procedures
+- ⏮️ **[Rollback Procedure](./runbooks/rollback-procedure.md)** - Rollback guide
+- 📊 **[SLO Definitions](./docs/slo-definitions.md)** - Performance targets
+- 📦 **[Data Retention Policy](./docs/data-retention-policy.md)** - Compliance requirements
+- 🔍 **[Audit Evidence Retrieval](./runbooks/audit-evidence-retrieval.md)** - Evidence export
+
+### Implementation Summaries
+- **[CONFIG_COPILOT_SUMMARY.md](./CONFIG_COPILOT_SUMMARY.md)** - Config Copilot implementation
+- **[CONTROL_EDIT_APPROVALS.md](./CONTROL_EDIT_APPROVALS.md)** - Approval workflow details
+- **[CONTROL_EDIT_OBSERVABILITY.md](./CONTROL_EDIT_OBSERVABILITY.md)** - Observability implementation
+- **[CONTROL_EDIT_RATE_LIMITING.md](./CONTROL_EDIT_RATE_LIMITING.md)** - Rate limiting details
+- **[DEMO_SCRIPTS_SUMMARY.md](./DEMO_SCRIPTS_SUMMARY.md)** - Demo scenario documentation
+
+### Domain Packs
+- **[Banking Capability Map](./docs/banking-capability-map.md)** - Domain taxonomy
+- **[Domain Pack Examples](./examples/)** - Sample configurations
+
 ## License
 
 Copyright © 2024. All rights reserved.
@@ -484,10 +682,10 @@ Copyright © 2024. All rights reserved.
 ## Support
 
 For questions or issues:
-1. Review [ARCHITECTURE.md](./ARCHITECTURE.md) for system design
-2. Check [PRD.md](./PRD.md) for product requirements
-3. See [Deployment Guide](./docs/deployment-guide.md) for deployment procedures
-4. Consult [Runbooks](./runbooks/) for operational procedures
+1. Start with **[FEATURES.md](./FEATURES.md)** for capability overview
+2. Review **[SOLUTION_ARCHITECTURE.md](./SOLUTION_ARCHITECTURE.md)** for technical design
+3. Check **[ROADMAP.md](./ROADMAP.md)** for future plans
+4. Consult **[Runbooks](./runbooks/)** for operational procedures
 
 ---
 
