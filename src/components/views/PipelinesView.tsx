@@ -7,13 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { GitBranch, Plus, CheckCircle, Warning, Code, TestTube, ArrowRight } from '@phosphor-icons/react';
+import { GitBranch, Plus, CheckCircle, Warning, Code, TestTube, ArrowRight, DownloadSimple } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import type { Dataset, PipelineSpec, UserRole } from '@/lib/types';
 import { PipelineService } from '@/lib/pipeline-service';
 import { AureusGuard } from '@/lib/aureus-guard';
 import { PolicyEvaluator } from '@/lib/policy-evaluator';
 import type { GuardConfig } from '@/lib/aureus-types';
+import { EvidenceKeys, downloadEvidenceBundle, getEvidenceBundle, verifyEvidenceBundle } from '@/lib/evidence-store';
 
 interface PipelinesViewProps {
   datasets: Dataset[];
@@ -35,6 +36,10 @@ export function PipelinesView({ datasets, pipelines, setPipelines }: PipelinesVi
   const [generatedPipeline, setGeneratedPipeline] = useState<any>(null);
   const [deployStage, setDeployStage] = useState<DeploymentStage>('dev');
   const [isDeploying, setIsDeploying] = useState(false);
+  const [evidenceVerification, setEvidenceVerification] = useState<Record<string, {
+    status: 'verified' | 'invalid';
+    detail: string;
+  }>>({});
 
   const handleGeneratePipeline = async () => {
     if (!name || !description || sourceDatasetIds.length === 0 || !targetDatasetName || !transformRules) {
@@ -112,7 +117,16 @@ export function PipelinesView({ datasets, pipelines, setPipelines }: PipelinesVi
           description: result.error,
         });
       } else if (result.success) {
-        setPipelines((prev) => [...prev, generatedPipeline.spec]);
+        const deployedAt = new Date().toISOString();
+        setPipelines((prev) => [
+          ...prev,
+          {
+            ...generatedPipeline.spec,
+            evidencePackId: result.evidencePackId,
+            deployedAt,
+            deployedStage: deployStage,
+          },
+        ]);
         toast.success(`Pipeline deployed to ${deployStage}!`, {
           description: `Snapshot ID: ${result.snapshotId?.substring(0, 16)}...`,
         });
@@ -145,6 +159,44 @@ export function PipelinesView({ datasets, pipelines, setPipelines }: PipelinesVi
         ? prev.filter((id) => id !== datasetId)
         : [...prev, datasetId]
     );
+  };
+
+  const handleDownloadEvidence = async (evidencePackId?: string) => {
+    if (!evidencePackId) {
+      toast.error('No evidence pack available for this pipeline');
+      return;
+    }
+
+    try {
+      const evidenceKey = EvidenceKeys.pipelinePack(evidencePackId);
+      const bundle = await getEvidenceBundle(evidenceKey);
+
+      if (!bundle) {
+        toast.error('Evidence bundle not found in storage');
+        return;
+      }
+
+      const verification = await verifyEvidenceBundle(bundle);
+      const verified = verification.hashMatches && verification.signatureMatches;
+
+      setEvidenceVerification((prev) => ({
+        ...prev,
+        [evidencePackId]: {
+          status: verified ? 'verified' : 'invalid',
+          detail: verified ? 'Signature verified' : 'Signature mismatch detected',
+        },
+      }));
+
+      if (!verified) {
+        toast.error('Evidence verification failed. Downloading anyway.');
+      }
+
+      downloadEvidenceBundle(bundle, `pipeline-evidence-${evidencePackId}.json`);
+      toast.success('Evidence bundle downloaded');
+    } catch (error) {
+      console.error('Failed to download evidence bundle', error);
+      toast.error('Failed to download evidence bundle');
+    }
   };
 
   return (
@@ -368,7 +420,41 @@ export function PipelinesView({ datasets, pipelines, setPipelines }: PipelinesVi
                         <span className="text-xs text-muted-foreground">
                           {pipeline.dqChecks.length} DQ checks
                         </span>
+                        {pipeline.deployedStage && (
+                          <Badge variant="outline">
+                            {pipeline.deployedStage.toUpperCase()}
+                          </Badge>
+                        )}
                       </div>
+                      {pipeline.deployedAt && (
+                        <div className="text-xs text-muted-foreground mt-2">
+                          Deployed {new Date(pipeline.deployedAt).toLocaleString()}
+                        </div>
+                      )}
+                      {pipeline.evidencePackId && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => handleDownloadEvidence(pipeline.evidencePackId)}
+                          >
+                            <DownloadSimple weight="fill" className="h-4 w-4" />
+                            Download Evidence Bundle
+                          </Button>
+                          {evidenceVerification[pipeline.evidencePackId] && (
+                            <Badge
+                              variant={
+                                evidenceVerification[pipeline.evidencePackId]?.status === 'verified'
+                                  ? 'default'
+                                  : 'destructive'
+                              }
+                            >
+                              {evidenceVerification[pipeline.evidencePackId]?.detail}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
