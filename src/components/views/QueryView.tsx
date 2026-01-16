@@ -204,13 +204,24 @@ export function QueryView({ datasets, queryHistory, setQueryHistory }: QueryView
                                 const maskedField = maskedFieldMap.get(key.toLowerCase());
                                 return (
                                   <TableHead key={key} className="font-semibold">
-                                    <div className="flex items-center gap-2">
-                                      <span>{key.replace(/_/g, ' ').toUpperCase()}</span>
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex items-center gap-2">
+                                        <span>{key.replace(/_/g, ' ').toUpperCase()}</span>
+                                        {maskedField && (
+                                          <Badge
+                                            variant="outline"
+                                            className="gap-1 text-[10px]"
+                                            title={`${maskedField.policyName}: ${maskedField.reason}`}
+                                          >
+                                            <LockKey weight="fill" className="h-3 w-3" />
+                                            Masked
+                                          </Badge>
+                                        )}
+                                      </div>
                                       {maskedField && (
-                                        <Badge variant="outline" className="gap-1 text-[10px]">
-                                          <LockKey weight="fill" className="h-3 w-3" />
-                                          Masked
-                                        </Badge>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {maskedField.policyName}: {maskedField.reason}
+                                        </span>
                                       )}
                                     </div>
                                   </TableHead>
