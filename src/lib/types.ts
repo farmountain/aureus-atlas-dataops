@@ -33,6 +33,8 @@ export interface Dataset {
   lastRefresh: string;
   tags: string[];
   recordCount?: number;
+  evidencePackId?: string;
+  onboardedAt?: string;
 }
 
 export interface PolicyCheck {

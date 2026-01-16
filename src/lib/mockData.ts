@@ -32,6 +32,8 @@ export const SAMPLE_DATASETS: Dataset[] = [
     lastRefresh: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     tags: ['transactions', 'retail', 'real-time'],
     recordCount: 15_234_567,
+    evidencePackId: 'evd-ct-001',
+    onboardedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'ds-002',

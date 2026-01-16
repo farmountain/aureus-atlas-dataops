@@ -1,8 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Database } from '@phosphor-icons/react';
 import type { Dataset } from '@/lib/types';
-import { PIIBadge, JurisdictionBadge, FreshnessBadge, DomainBadge } from '../badges/StatusBadges';
+import { PIIBadge, JurisdictionBadge, FreshnessBadge, DomainBadge, EvidencePackBadge } from '../badges/StatusBadges';
 
 interface DatasetCardProps {
   dataset: Dataset;
@@ -34,6 +33,7 @@ export function DatasetCard({ dataset, onClick }: DatasetCardProps) {
           <PIIBadge level={dataset.piiLevel} />
           <JurisdictionBadge jurisdiction={dataset.jurisdiction} />
           <FreshnessBadge slaHours={dataset.freshnessSLA} lastRefresh={dataset.lastRefresh} />
+          <EvidencePackBadge evidencePackId={dataset.evidencePackId} />
         </div>
       </CardHeader>
       <CardContent className="pt-0">
