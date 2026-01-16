@@ -18,6 +18,7 @@ export interface ConfigCopilotPrefill {
   commitMessage: string;
   context?: ConfigDescribeRequest['context'];
   datasetDetails: DatasetOnboardingDetails;
+  autoDescribe?: boolean;
 }
 
 export const DEFAULT_ONBOARDING_DETAILS: DatasetOnboardingDetails = {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sparkle, CheckCircle, WarningCircle, XCircle, ArrowRight, FloppyDisk, DownloadSimple } from '@phosphor-icons/react';
 import {
   ConfigCopilotService,
+  type ConfigDescribeRequest,
   type ConfigDescribeResponse,
   type ConfigCommitResponse,
   type ConfigEvidence
@@ -43,20 +44,8 @@ export function ConfigCopilotView({ prefill, onDatasetRegistered }: ConfigCopilo
   }>(null);
   const appliedPrefillId = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (prefill && prefill.id !== appliedPrefillId.current) {
-      setNlInput(prefill.nlInput);
-      setCommitMessage(prefill.commitMessage);
-      setDescribeContext(prefill.context ?? {});
-      setDescribeResponse(null);
-      setCommitResponse(null);
-      setEvidenceVerification(null);
-      appliedPrefillId.current = prefill.id;
-    }
-  }, [prefill]);
-
-  const handleDescribe = async () => {
-    if (!nlInput.trim()) {
+  const runDescribe = useCallback(async (input: string, context: ConfigDescribeRequest['context']) => {
+    if (!input.trim()) {
       toast.error('Please enter a description');
       return;
     }
@@ -68,8 +57,8 @@ export function ConfigCopilotView({ prefill, onDatasetRegistered }: ConfigCopilo
 
     try {
       const response = await ConfigCopilotService.describe({
-        nlInput: nlInput.trim(),
-        context: describeContext ?? {}
+        nlInput: input.trim(),
+        context: context ?? {}
       });
 
       setDescribeResponse(response);
@@ -85,6 +74,26 @@ export function ConfigCopilotView({ prefill, onDatasetRegistered }: ConfigCopilo
     } finally {
       setIsGenerating(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (prefill && prefill.id !== appliedPrefillId.current) {
+      setNlInput(prefill.nlInput);
+      setCommitMessage(prefill.commitMessage);
+      setDescribeContext(prefill.context ?? {});
+      setDescribeResponse(null);
+      setCommitResponse(null);
+      setEvidenceVerification(null);
+      appliedPrefillId.current = prefill.id;
+
+      if (prefill.autoDescribe) {
+        void runDescribe(prefill.nlInput, prefill.context ?? {});
+      }
+    }
+  }, [prefill, runDescribe]);
+
+  const handleDescribe = async () => {
+    await runDescribe(nlInput, describeContext ?? {});
   };
 
   const handleCommit = async () => {
@@ -146,7 +155,9 @@ export function ConfigCopilotView({ prefill, onDatasetRegistered }: ConfigCopilo
             jurisdiction: datasetContract.jurisdiction,
             freshnessSLA: datasetContract.freshnessSLA,
             lastRefresh: new Date().toISOString(),
-            tags: datasetContract.tags ?? []
+            tags: datasetContract.tags ?? [],
+            evidencePackId: response.commitId,
+            onboardedAt: response.timestamp
           };
           onDatasetRegistered?.(dataset);
           toast.success(`Dataset ${dataset.name} added to catalog`);

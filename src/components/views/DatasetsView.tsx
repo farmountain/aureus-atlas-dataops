@@ -96,7 +96,8 @@ export function DatasetsView({ datasets, onStartOnboarding }: DatasetsViewProps)
         domain: details.domain,
         existingDatasets: datasets.map(dataset => dataset.name),
       },
-      datasetDetails: details
+      datasetDetails: details,
+      autoDescribe: true
     };
 
     onStartOnboarding(prefill);
@@ -190,6 +191,12 @@ export function DatasetsView({ datasets, onStartOnboarding }: DatasetsViewProps)
                   <div>
                     <div className="text-muted-foreground mb-1">Last Refresh</div>
                     <div className="font-semibold">{new Date(selectedDataset.lastRefresh).toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground mb-1">Evidence Pack</div>
+                    <div className="font-semibold">
+                      {selectedDataset.evidencePackId ? 'Ready' : 'Not available'}
+                    </div>
                   </div>
                 </div>
 

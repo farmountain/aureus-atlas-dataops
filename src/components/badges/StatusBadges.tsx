@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { ShieldCheck, Warning, XCircle, Clock, Eye, LockKey, Globe } from '@phosphor-icons/react';
+import { ShieldCheck, Warning, XCircle, Clock, Eye, LockKey, Globe, CheckCircle } from '@phosphor-icons/react';
 import type { PIILevel, Jurisdiction, PolicyCheck } from '@/lib/types';
 
 export function PIIBadge({ level }: { level: PIILevel }) {
@@ -108,6 +108,19 @@ export function ApprovalStatusBadge({
   return (
     <Badge variant={variants[status]}>
       {status.toUpperCase()}
+    </Badge>
+  );
+}
+
+export function EvidencePackBadge({ evidencePackId }: { evidencePackId?: string }) {
+  if (!evidencePackId) {
+    return null;
+  }
+
+  return (
+    <Badge variant="default" className="gap-1.5">
+      <CheckCircle weight="fill" className="h-3.5 w-3.5" />
+      Evidence Ready
     </Badge>
   );
 }
