@@ -14,8 +14,13 @@ import {
   validateSLAs 
 } from './config-schemas';
 import type { AuditEvent } from './types';
+import type { ActionContext } from './aureus-types';
+import type { UserRole } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { EvidenceKeys, getEvidenceBundle, storeEvidenceBundle } from './evidence-store';
+import { AureusGuard } from './aureus-guard';
+import { PolicyEvaluator } from './policy-evaluator';
+import { ApprovalService } from './approval-service';
 
 export interface ConfigDescribeRequest {
   nlInput: string;
@@ -51,6 +56,7 @@ export interface ConfigCommitResponse {
   auditEventId: string;
   snapshotId: string;
   status: 'success' | 'failed';
+  approvalId?: string;
   errors?: string[];
 }
 
@@ -380,6 +386,84 @@ Return ONLY a valid JSON object with a single "slas" property containing an arra
     }
 
     try {
+      const guard = new AureusGuard(
+        {
+          environment: 'prod',
+          budgetLimits: { tokenBudget: 100000, queryCostBudget: 1000 },
+          enableAudit: true,
+          enableSnapshots: true,
+        },
+        new PolicyEvaluator()
+      );
+      const approvalService = new ApprovalService(guard);
+      const kvRole = typeof spark !== 'undefined' && spark?.kv
+        ? await spark.kv.get<UserRole>('user_role')
+        : null;
+      const role: UserRole = kvRole ?? 'analyst';
+      const actionContext: ActionContext = {
+        actionType: 'config.commit',
+        actor: request.actor,
+        role,
+        environment: 'prod',
+        metadata: {
+          commitId,
+          requestId: request.requestId,
+          fileCount: Object.keys(request.drafts).length,
+        },
+      };
+
+      const policyCheck = await guard.checkPolicy(actionContext);
+      if (!policyCheck.allow && policyCheck.requiresApproval) {
+        const approval = await approvalService.requestApproval({
+          actionType: 'policy_change',
+          requester: request.actor,
+          requesterRole: role,
+          description: `Config commit ${commitId} requires approval: ${policyCheck.reason}`,
+          actionPayload: {
+            commitId,
+            requestId: request.requestId,
+            commitMessage: request.commitMessage,
+            drafts: request.drafts,
+          },
+          actionContext: {
+            ...actionContext,
+            metadata: {
+              ...actionContext.metadata,
+              originatingAction: {
+                type: 'config',
+                id: commitId,
+                label: request.commitMessage,
+              },
+            },
+          },
+        });
+
+        return {
+          commitId,
+          timestamp,
+          filesWritten: [],
+          validationResult,
+          auditEventId: '',
+          snapshotId: '',
+          status: 'failed',
+          approvalId: approval.id,
+          errors: [`Approval required: ${policyCheck.reason}`],
+        };
+      }
+
+      if (!policyCheck.allow) {
+        return {
+          commitId,
+          timestamp,
+          filesWritten: [],
+          validationResult,
+          auditEventId: '',
+          snapshotId: '',
+          status: 'failed',
+          errors: [policyCheck.reason],
+        };
+      }
+
       const baseKey = `specs/${commitId}`;
       
       if (request.drafts.datasetContract) {

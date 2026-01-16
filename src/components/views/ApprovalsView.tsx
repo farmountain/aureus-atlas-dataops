@@ -8,23 +8,30 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle, XCircle, Warning, ShieldCheck, DownloadSimple } from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import { ApprovalService, type ApprovalObject } from '@/lib/approval-service';
+import { ApprovalService, type ApprovalObject, useApprovalQueueStore } from '@/lib/approval-service';
 import { AureusGuard } from '@/lib/aureus-guard';
 import { PolicyEvaluator } from '@/lib/policy-evaluator';
 import { EvidenceKeys, downloadEvidenceBundle, getEvidenceBundle, verifyEvidenceBundle } from '@/lib/evidence-store';
-import type { ApprovalRequest, UserRole } from '@/lib/types';
+import type { UserRole } from '@/lib/types';
 import { RiskLevelBadge, ApprovalStatusBadge } from '../badges/StatusBadges';
 
+type OriginatingAction = {
+  type: 'query' | 'pipeline' | 'config';
+  id: string;
+  label?: string;
+  stage?: string;
+};
+
 interface ApprovalsViewProps {
-  approvals: ApprovalRequest[];
+  onNavigateToAction?: (action: OriginatingAction) => void;
 }
 
-export function ApprovalsView({ approvals }: ApprovalsViewProps) {
-  const [selectedApproval, setSelectedApproval] = useState<ApprovalRequest | null>(null);
+export function ApprovalsView({ onNavigateToAction }: ApprovalsViewProps) {
+  const [selectedApproval, setSelectedApproval] = useState<ApprovalObject | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useKV<UserRole>('user_role', 'analyst');
-  const [storedApprovals, setStoredApprovals] = useKV<ApprovalObject[]>('approval_objects', []);
+  const [approvalQueue, setApprovalQueue] = useApprovalQueueStore();
   const [evidenceVerification, setEvidenceVerification] = useState<null | {
     status: 'verified' | 'invalid';
     detail: string;
@@ -40,41 +47,27 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
       },
       new PolicyEvaluator()
     );
-    const service = new ApprovalService(guard);
-    
-    (storedApprovals || []).forEach(approval => {
-      service['approvals'].set(approval.id, approval);
-    });
-    
-    return service;
+    return new ApprovalService(guard);
   }, []);
 
   useEffect(() => {
-    const syncToKV = () => {
-      const allApprovals = approvalService.getAllApprovals();
-      setStoredApprovals(allApprovals);
-    };
-    
-    const interval = setInterval(syncToKV, 2000);
-    return () => clearInterval(interval);
-  }, [approvalService, setStoredApprovals]);
+    approvalService.syncApprovals(approvalQueue || []);
+  }, [approvalQueue, approvalService]);
 
   useEffect(() => {
     setEvidenceVerification(null);
   }, [selectedApproval]);
 
-  const handleDownloadEvidence = async () => {
-    if (!selectedApproval) return;
-
+  const handleDownloadEvidence = async (approval: ApprovalObject) => {
     const stage =
-      selectedApproval.status === 'pending'
+      approval.status === 'PENDING'
         ? 'request'
-        : selectedApproval.status === 'approved'
+        : approval.status === 'APPROVED'
           ? 'approved_and_executed'
           : 'rejected';
 
     try {
-      const evidenceKey = EvidenceKeys.approvalPack(selectedApproval.evidencePackId, stage);
+      const evidenceKey = EvidenceKeys.approvalPack(approval.evidencePackId, stage);
       const bundle = await getEvidenceBundle(evidenceKey);
 
       if (!bundle) {
@@ -93,7 +86,7 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
         toast.error('Evidence verification failed. Downloading anyway.');
       }
 
-      downloadEvidenceBundle(bundle, `approval-evidence-${selectedApproval.evidencePackId}-${stage}.json`);
+      downloadEvidenceBundle(bundle, `approval-evidence-${approval.evidencePackId}-${stage}.json`);
       toast.success('Evidence bundle downloaded');
     } catch (error) {
       console.error('Failed to download evidence bundle', error);
@@ -140,7 +133,7 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
       setApprovalComment('');
       
       const allApprovals = approvalService.getAllApprovals();
-      setStoredApprovals(allApprovals);
+      setApprovalQueue(allApprovals);
     } catch (error) {
       toast.error('Approval failed', {
         description: error instanceof Error ? error.message : 'Unknown error',
@@ -185,7 +178,7 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
       setApprovalComment('');
       
       const allApprovals = approvalService.getAllApprovals();
-      setStoredApprovals(allApprovals);
+      setApprovalQueue(allApprovals);
     } catch (error) {
       toast.error('Rejection failed', {
         description: error instanceof Error ? error.message : 'Unknown error',
@@ -195,8 +188,46 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
     }
   };
 
-  const pendingApprovals = approvals.filter(a => a.status === 'pending');
-  const completedApprovals = approvals.filter(a => a.status !== 'pending');
+  const approvals = approvalQueue || [];
+  const pendingApprovals = approvals.filter((approval) => approval.status === 'PENDING');
+  const completedApprovals = approvals.filter((approval) => approval.status !== 'PENDING');
+
+  const getOriginatingAction = (approval: ApprovalObject): OriginatingAction | null => {
+    const action = approval.actionContext?.metadata?.originatingAction;
+    if (!action || typeof action !== 'object') {
+      return null;
+    }
+
+    const { type, id, label, stage } = action as OriginatingAction;
+    if (!type || !id) {
+      return null;
+    }
+
+    return { type, id, label, stage };
+  };
+
+  const formatApprovalStatus = (status: ApprovalObject['status']) => {
+    switch (status) {
+      case 'APPROVED':
+        return 'approved' as const;
+      case 'REJECTED':
+        return 'rejected' as const;
+      default:
+        return 'pending' as const;
+    }
+  };
+
+  const buildDetailEntries = (approval: ApprovalObject) => {
+    const metadata = approval.actionContext?.metadata ?? {};
+    return {
+      approval_id: approval.id,
+      action_type: approval.actionType,
+      environment: approval.actionContext.environment,
+      requester_role: approval.requesterRole,
+      ...metadata,
+      ...approval.actionPayload,
+    } as Record<string, unknown>;
+  };
 
   return (
     <div className="space-y-6">
@@ -269,8 +300,34 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                     <RiskLevelBadge level={approval.riskLevel} />
                   </div>
                   <div className="flex gap-2 mt-4">
-                    <Badge variant="outline">{approval.type.replace('_', ' ').toUpperCase()}</Badge>
-                    <ApprovalStatusBadge status={approval.status} />
+                    <Badge variant="outline">{approval.actionType.replace('_', ' ').toUpperCase()}</Badge>
+                    <ApprovalStatusBadge status={formatApprovalStatus(approval.status)} />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-accent"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleDownloadEvidence(approval);
+                      }}
+                    >
+                      Evidence pack
+                    </Button>
+                    {getOriginatingAction(approval) && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-accent"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onNavigateToAction?.(getOriginatingAction(approval)!);
+                        }}
+                      >
+                        View originating action
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -300,8 +357,28 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                       {approval.approver && `Decided by ${approval.approver} • `}
                       {approval.approvalTimestamp && new Date(approval.approvalTimestamp).toLocaleString()}
                     </div>
+                    <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-accent"
+                        onClick={() => void handleDownloadEvidence(approval)}
+                      >
+                        Evidence pack
+                      </Button>
+                      {getOriginatingAction(approval) && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-accent"
+                          onClick={() => onNavigateToAction?.(getOriginatingAction(approval)!)}
+                        >
+                          View originating action
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <ApprovalStatusBadge status={approval.status} />
+                  <ApprovalStatusBadge status={formatApprovalStatus(approval.status)} />
                 </div>
               ))}
             </div>
@@ -335,13 +412,17 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                 <div>
                   <div className="text-sm font-semibold mb-3">Request Details</div>
                   <div className="space-y-2 text-sm">
-                    {Object.entries(selectedApproval.details).map(([key, value]) => (
+                    {Object.entries(buildDetailEntries(selectedApproval)).map(([key, value]) => (
                       <div key={key} className="flex gap-2">
                         <span className="text-muted-foreground min-w-[150px]">
                           {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
                         </span>
                         <span className="font-medium">
-                          {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
+                          {typeof value === 'boolean'
+                            ? (value ? 'Yes' : 'No')
+                            : typeof value === 'object'
+                              ? JSON.stringify(value)
+                              : String(value)}
                         </span>
                       </div>
                     ))}
@@ -351,7 +432,12 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                 <div>
                   <div className="text-sm font-semibold mb-3">Evidence Pack</div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadEvidence}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => void handleDownloadEvidence(selectedApproval)}
+                    >
                       <DownloadSimple weight="fill" className="h-4 w-4" />
                       Download Evidence Bundle
                     </Button>
@@ -362,6 +448,28 @@ export function ApprovalsView({ approvals }: ApprovalsViewProps) {
                     )}
                   </div>
                 </div>
+
+                {getOriginatingAction(selectedApproval) && (
+                  <div>
+                    <div className="text-sm font-semibold mb-3">Originating Action</div>
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-accent"
+                        onClick={() => onNavigateToAction?.(getOriginatingAction(selectedApproval)!)}
+                      >
+                        {getOriginatingAction(selectedApproval)?.label ||
+                          `${getOriginatingAction(selectedApproval)?.type.toUpperCase()} ${getOriginatingAction(selectedApproval)?.id}`}
+                      </Button>
+                      {getOriginatingAction(selectedApproval)?.stage && (
+                        <Badge variant="outline">
+                          {getOriginatingAction(selectedApproval)?.stage}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label htmlFor="approval-comment" className="text-sm font-semibold block mb-2">

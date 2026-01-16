@@ -1,9 +1,10 @@
-import type { Dataset, PolicyCheck, Domain } from './types';
+import type { Dataset, PolicyCheck, Domain, UserRole } from './types';
 import { AureusGuard } from './aureus-guard';
 import type { ActionContext } from './aureus-types';
 import { PostgresSandbox } from './postgres-sandbox';
 import { queryRateLimiter } from './rate-limiter';
 import { applyPiiMasking, type MaskedField, type MaskingPolicySummary } from './pii-masking';
+import { ApprovalService } from './approval-service';
 
 export interface QueryIntent {
   question: string;
@@ -75,11 +76,13 @@ export class QueryService {
   private sandbox: PostgresSandbox;
   private datasets: Map<string, Dataset>;
   private lineageStore: Map<string, QueryLineage> = new Map();
+  private approvalService: ApprovalService;
 
   constructor(aureusGuard: AureusGuard, datasets: Map<string, Dataset>) {
     this.aureusGuard = aureusGuard;
     this.datasets = datasets;
     this.sandbox = new PostgresSandbox();
+    this.approvalService = new ApprovalService(aureusGuard);
   }
 
   private generateId(prefix: string): string {
@@ -103,13 +106,14 @@ export class QueryService {
     const context: ActionContext = {
       actionType: 'query_execute',
       actor: request.actor,
-      role: request.role as 'admin' | 'approver' | 'analyst' | 'viewer',
+      role: request.role as UserRole,
       environment: 'prod',
       metadata: {
         domain: request.domain,
         piiLevel: this.getMaxPIILevel(requiredDatasets),
         jurisdiction: this.getJurisdictions(requiredDatasets) as any,
         datasetsUsed: requiredDatasets.map(ds => ds.id),
+        queryId,
       },
     };
 
@@ -158,6 +162,34 @@ export class QueryService {
         result: 'require_approval',
         reason: `Dataset ${staleDataset.datasetName} is stale (last refresh: ${staleDataset.hoursSinceRefresh}h ago, SLA: ${staleDataset.freshnessSLA}h)`,
         evaluated: timestamp,
+      });
+    }
+
+    const approvalsNeeded = policyChecks.filter((check) => check.result === 'require_approval');
+    if (approvalsNeeded.length > 0) {
+      await this.approvalService.requestApproval({
+        actionType: 'pii_access_high',
+        requester: request.actor,
+        requesterRole: request.role as UserRole,
+        description: `Query ${queryId} requires approval: ${approvalsNeeded.map((check) => check.reason).join('; ')}`,
+        actionPayload: {
+          queryId,
+          question: request.question,
+          sql,
+          datasets: requiredDatasets.map(ds => ds.id),
+          policyChecks: approvalsNeeded,
+        },
+        actionContext: {
+          ...context,
+          metadata: {
+            ...context.metadata,
+            originatingAction: {
+              type: 'query',
+              id: queryId,
+              label: request.question,
+            },
+          },
+        },
       });
     }
 
