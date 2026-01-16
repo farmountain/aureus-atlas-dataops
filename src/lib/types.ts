@@ -78,6 +78,9 @@ export interface PipelineSpec {
   tests: TestSpec[];
   dqChecks: DQCheck[];
   schedule?: string;
+  evidencePackId?: string;
+  deployedAt?: string;
+  deployedStage?: "dev" | "uat" | "prod";
 }
 
 export interface TestSpec {
