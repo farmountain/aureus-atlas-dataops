@@ -454,6 +454,30 @@ Evidence packs are:
 - **Complete**: Include all inputs, outputs, decisions
 - **Auditable**: Available for regulatory review
 
+### Disclaimer: Evidence Signing (Simulated)
+Evidence signing in this frontend demo is **simulated**. Signatures shown in evidence packs are placeholders to illustrate intended cryptographic workflows. A production deployment would use real key management, certificate chains, and verification services to provide tamper-proof attestations across all evidence flows.
+
+### Example Evidence Bundle (with Signature Fields)
+```json
+{
+  "id": "evd-2024-01-15-0001",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "eventType": "pipeline_deploy",
+  "actor": "jane.approver",
+  "inputs": { "pipelineId": "pl-123", "environment": "prod" },
+  "outputs": { "status": "deployed", "snapshotId": "snap-456" },
+  "hash": "sha256:7f9c...d2a1",
+  "signatures": [
+    {
+      "alg": "RS256",
+      "keyId": "kms://aureus/signing-key-01",
+      "signedAt": "2024-01-15T10:30:05Z",
+      "signature": "base64:MEUCIQD..."
+    }
+  ]
+}
+```
+
 ## Policy Engine
 
 Simulated OPA-style policy evaluation:
