@@ -99,8 +99,21 @@ export function applyPiiMasking(
   const policyLevel = decision?.policyId?.replace('pii-masking-', '').toUpperCase() ?? '';
   const fallbackStrategy = DEFAULT_MASKING_BY_LEVEL[policyLevel];
 
-  if (!decision || !decision.allow) {
+  if (!decision) {
     return { maskedResults: results, maskedFields: [] };
+  }
+
+  const shouldMask = decision.allow || decision.requiresApproval;
+  if (!shouldMask) {
+    return {
+      maskedResults: results,
+      maskedFields: [],
+      policySummary: {
+        policyId: decision.policyId,
+        policyName: decision.policyName,
+        reason: decision.reason,
+      },
+    };
   }
 
   const piiColumns = new Map<string, { name: string }>();
