@@ -34,6 +34,26 @@ See [GitHub's Safe Harbor Policy](https://docs.github.com/en/site-policy/securit
 
 # AUREUS Platform Security Guidelines
 
+## Prompt Injection Defense Coverage
+
+The project includes a prompt injection defense module at
+[`src/lib/prompt-injection-defense.ts`](src/lib/prompt-injection-defense.ts). It is designed to
+provide layered validation around LLM interactions and covers:
+
+- **User input screening** for common prompt-injection patterns, encoded payloads, tool execution
+  requests, and suspicious SQL keywords.
+- **Retrieval grounding enforcement** to require approved datasets/domains before retrieval-augmented
+  generation.
+- **Generated SQL validation** to ensure SELECT-only queries, block destructive SQL keywords, and
+  restrict table access to approved lists.
+- **LLM output validation** to detect empty/oversized outputs, schema mismatches, and potential
+  code-execution markers.
+
+**Invocation intent**: These helpers are meant to be called before LLM prompts are issued and after
+LLM outputs are received (for example, in query/config workflows). **Current limitation**: the
+module exists and is unit-tested but is not yet wired into the live LLM call stack, so the checks
+are advisory until integrated into runtime request/response handling.
+
 ## Secrets Management for Production
 
 ### Overview
