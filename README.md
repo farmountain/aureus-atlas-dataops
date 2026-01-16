@@ -2,6 +2,8 @@
 
 A bank-grade LLM-assisted data platform frontend demonstrating governed, evidence-based data operations with natural language interfaces.
 
+Quick Demo Link: https://aureus-atlas-dataops--farmountain.github.app/
+
 ## Overview
 
 AUREUS is a **production-ready frontend demonstration** of a comprehensive governed data platform designed for banking and financial services. It showcases the complete user experience for:
