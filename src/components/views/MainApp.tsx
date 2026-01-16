@@ -9,20 +9,21 @@ import { ApprovalsView } from './ApprovalsView';
 import { GuardDemo } from './GuardDemo';
 import { ConfigCopilotView } from './ConfigCopilotView';
 import { ObservabilityView } from './ObservabilityView';
-import type { Dataset, ApprovalRequest, PipelineSpec } from '@/lib/types';
+import type { Dataset, PipelineSpec } from '@/lib/types';
 import type { QueryAskResponse } from '@/lib/query-service';
-import { SAMPLE_DATASETS, SAMPLE_APPROVALS } from '@/lib/mockData';
+import { SAMPLE_DATASETS } from '@/lib/mockData';
+import { useApprovalQueueStore } from '@/lib/approval-service';
 import type { ConfigCopilotPrefill } from '@/lib/config-copilot-onboarding';
 
 export default function App() {
   const [datasets, setDatasets] = useKV<Dataset[]>('datasets', SAMPLE_DATASETS);
-  const [approvals] = useKV<ApprovalRequest[]>('approvals', SAMPLE_APPROVALS);
+  const [approvals] = useApprovalQueueStore();
   const [queryHistory, setQueryHistory] = useKV<QueryAskResponse[]>('query_history', []);
   const [pipelines, setPipelines] = useKV<PipelineSpec[]>('pipelines', []);
   const [activeTab, setActiveTab] = useState('query');
   const [copilotPrefill, setCopilotPrefill] = useState<ConfigCopilotPrefill | null>(null);
 
-  const pendingApprovals = (approvals || []).filter(a => a.status === 'pending');
+  const pendingApprovals = (approvals || []).filter(a => a.status === 'PENDING');
   const datasetList = datasets || [];
 
   const handleStartOnboarding = (prefill: ConfigCopilotPrefill) => {
@@ -129,7 +130,15 @@ export default function App() {
           </TabsContent>
 
           <TabsContent value="approvals" className="mt-0">
-            <ApprovalsView approvals={approvals || []} />
+            <ApprovalsView onNavigateToAction={(action) => {
+              if (action.type === 'pipeline') {
+                setActiveTab('pipelines');
+              } else if (action.type === 'config') {
+                setActiveTab('config');
+              } else {
+                setActiveTab('query');
+              }
+            }} />
           </TabsContent>
 
           <TabsContent value="guard" className="mt-0">

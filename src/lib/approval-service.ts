@@ -1,3 +1,4 @@
+import { useKV } from '@github/spark/hooks';
 import { AureusGuard } from './aureus-guard';
 import { PolicyEvaluator } from './policy-evaluator';
 import type { ApprovalRequest, UserRole } from './types';
@@ -49,6 +50,11 @@ export interface ApprovalExecutionResult {
   error?: string;
 }
 
+export const APPROVAL_QUEUE_KEY = 'approval_queue';
+
+export const useApprovalQueueStore = () =>
+  useKV<ApprovalObject[]>(APPROVAL_QUEUE_KEY, []);
+
 export class ApprovalService {
   private approvals: Map<string, ApprovalObject> = new Map();
   private guard: AureusGuard;
@@ -59,6 +65,60 @@ export class ApprovalService {
     this.guard = guard;
     this.policyEvaluator = new PolicyEvaluator();
     this.evidenceDir = evidenceDir;
+    void this.hydrateApprovals();
+  }
+
+  private getKvStore() {
+    if (typeof window !== 'undefined' && window.spark?.kv) {
+      return window.spark.kv;
+    }
+
+    if (typeof spark !== 'undefined' && spark?.kv) {
+      return spark.kv;
+    }
+
+    return null;
+  }
+
+  private async hydrateApprovals(): Promise<void> {
+    const kv = this.getKvStore();
+    if (!kv) {
+      return;
+    }
+
+    const stored = await kv.get<ApprovalObject[]>(APPROVAL_QUEUE_KEY);
+    if (stored && stored.length > 0) {
+      this.approvals = new Map(stored.map((approval) => [approval.id, approval]));
+    }
+  }
+
+  private async persistApprovalQueue(): Promise<void> {
+    const kv = this.getKvStore();
+    if (!kv) {
+      return;
+    }
+
+    await kv.set(APPROVAL_QUEUE_KEY, this.getAllApprovals());
+  }
+
+  private async upsertApproval(approval: ApprovalObject): Promise<void> {
+    this.approvals.set(approval.id, approval);
+    await this.persistApprovalQueue();
+  }
+
+  private async loadApprovalFromStore(approvalId: string): Promise<ApprovalObject | undefined> {
+    const kv = this.getKvStore();
+    if (!kv) {
+      return undefined;
+    }
+
+    const stored = await kv.get<ApprovalObject[]>(APPROVAL_QUEUE_KEY);
+    const match = stored?.find((approval) => approval.id === approvalId);
+    if (match) {
+      this.approvals.set(match.id, match);
+    }
+
+    return match;
   }
 
   private generateId(): string {
@@ -103,8 +163,6 @@ export class ApprovalService {
       },
     };
 
-    const policyCheck = await this.guard.checkPolicy(auditContext);
-
     const auditEvent = await this.guard.execute({
       context: auditContext,
       payload: {
@@ -129,7 +187,7 @@ export class ApprovalService {
       auditEventIds: [auditEvent.auditEventId],
     };
 
-    this.approvals.set(approvalId, approval);
+    await this.upsertApproval(approval);
 
     await this.writeEvidencePack(approval, 'request');
 
@@ -144,7 +202,7 @@ export class ApprovalService {
     approverRole: UserRole,
     comment?: string
   ): Promise<ApprovalExecutionResult> {
-    const approval = this.approvals.get(approvalId);
+    const approval = this.approvals.get(approvalId) ?? await this.loadApprovalFromStore(approvalId);
 
     if (!approval) {
       throw new Error(`Approval ${approvalId} not found`);
@@ -192,6 +250,7 @@ export class ApprovalService {
     const executionResult = await this.executeApprovedAction(approval);
 
     await this.writeEvidencePack(approval, 'approved_and_executed', executionResult);
+    await this.upsertApproval(approval);
 
     console.log(`[ApprovalService] Approved and executed ${approvalId} by ${approver}`);
 
@@ -210,7 +269,7 @@ export class ApprovalService {
     approverRole: UserRole,
     comment?: string
   ): Promise<void> {
-    const approval = this.approvals.get(approvalId);
+    const approval = this.approvals.get(approvalId) ?? await this.loadApprovalFromStore(approvalId);
 
     if (!approval) {
       throw new Error(`Approval ${approvalId} not found`);
@@ -255,6 +314,7 @@ export class ApprovalService {
     approval.auditEventIds.push(rejectionAuditEvent.auditEventId);
 
     await this.writeEvidencePack(approval, 'rejected');
+    await this.upsertApproval(approval);
 
     console.log(`[ApprovalService] Rejected ${approvalId} by ${approver}`);
   }
@@ -365,5 +425,10 @@ export class ApprovalService {
 
   clearApprovals(): void {
     this.approvals.clear();
+    void this.persistApprovalQueue();
+  }
+
+  syncApprovals(approvals: ApprovalObject[]): void {
+    this.approvals = new Map(approvals.map((approval) => [approval.id, approval]));
   }
 }
