@@ -130,6 +130,8 @@ Before any deployment/modification:
 
 **Status**: ✅ **MVP COMPLETE** (`src/lib/query-service.ts`, `src/lib/postgres-sandbox.ts`)
 
+**UI Disclaimer**: The current UI uses a simplified LLM query flow; the `QueryService` implementation represents the intended production-grade workflow. Remove this disclaimer once `QueryView` is wired to `QueryService`.
+
 **Implementation**:
 - POST /query/ask endpoint that accepts natural language questions
 - Canonical intent JSON generation (measures, dimensions, filters, time range, aggregation, orderBy, limit)
