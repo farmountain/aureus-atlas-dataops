@@ -35,6 +35,15 @@ class SQLValidationError(AureusException):
     pass
 
 
+class QueryExecutionError(AureusException):
+    """Query execution failed"""
+    def __init__(self, message: str, execution_id: str = None, evidence: dict = None, sql: str = None):
+        super().__init__(message)
+        self.execution_id = execution_id
+        self.evidence = evidence
+        self.sql = sql
+
+
 def create_error_response(code: str, message: str, details: list = None, request_id: str = None):
     """Create standardized error response"""
     error = {
