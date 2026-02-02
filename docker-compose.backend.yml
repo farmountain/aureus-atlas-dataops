@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: aureus-api
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       - DATABASE_URL=postgresql://aureus:dev_password_123@postgres:5432/aureus
       - REDIS_URL=redis://redis:6379/0

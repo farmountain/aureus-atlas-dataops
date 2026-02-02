@@ -22,7 +22,7 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    logger.info("Starting AUREUS Backend API", version=settings.VERSION)
+    logger.info(f"Starting AUREUS Backend API version {settings.VERSION}")
     
     # Create database tables
     async with engine.begin() as conn:
@@ -46,9 +46,10 @@ app = FastAPI(
 )
 
 # CORS middleware
+cors_origins = settings.CORS_ORIGINS.split(',') if isinstance(settings.CORS_ORIGINS, str) else settings.CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,12 +73,9 @@ async def add_request_id(request: Request, call_next):
     response.headers["X-Process-Time"] = str(process_time)
     
     logger.info(
-        "Request processed",
-        request_id=request_id,
-        method=request.method,
-        path=request.url.path,
-        status_code=response.status_code,
-        process_time=f"{process_time:.3f}s"
+        f"Request processed: {request.method} {request.url.path} - "
+        f"Status: {response.status_code} - Time: {process_time:.3f}s - "
+        f"RequestID: {request_id}"
     )
     
     return response
@@ -90,10 +88,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     logger.error(
-        "Unhandled exception",
-        request_id=request_id,
-        error=str(exc),
-        path=request.url.path
+        f"Unhandled exception: {str(exc)} - Path: {request.url.path} - RequestID: {request_id}"
     )
     
     return JSONResponse(

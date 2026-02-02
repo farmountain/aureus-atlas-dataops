@@ -28,23 +28,23 @@ docker ps
 # Expected to see: aureus-api, aureus-postgres, aureus-redis, aureus-minio, aureus-worker
 
 # Test health endpoint
-curl http://localhost:8000/health
+curl http://localhost:8001/health
 
 # Should return: {"status":"healthy","version":"1.0.0","environment":"development"}
 
 # Test login
-curl -X POST "http://localhost:8000/v1/auth/login" `
+curl -X POST "http://localhost:8001/v1/auth/login" `
   -H "Content-Type: application/x-www-form-urlencoded" `
   -d "username=admin@aureus-platform.com&password=Admin123!"
 
 # Should return JWT token and user info
 
 # View API documentation
-Start-Process "http://localhost:8000/docs"
+Start-Process "http://localhost:8001/docs"
 ```
 
 ## Step 4: Access Services
-- **API Docs**: http://localhost:8000/docs
+- **API Docs**: http://localhost:8001/docs
 - **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
 - **Database**: localhost:5432 (aureus/dev_password_123)
 

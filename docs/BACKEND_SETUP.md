@@ -19,7 +19,7 @@ docker-compose -f docker-compose.backend.yml up -d
 docker-compose -f docker-compose.backend.yml ps
 
 # View API documentation
-# Open browser: http://localhost:8000/docs
+# Open browser: http://localhost:8001/docs
 
 # View logs
 docker-compose -f docker-compose.backend.yml logs -f api

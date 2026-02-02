@@ -61,7 +61,7 @@ Write-Host "`n[6/6] Testing API endpoints..." -ForegroundColor Yellow
 
 # Test health endpoint
 try {
-    $health = Invoke-RestMethod -Uri "http://localhost:8000/health" -TimeoutSec 5
+    $health = Invoke-RestMethod -Uri "http://localhost:8001/health" -TimeoutSec 5
     Write-Host "✓ Health check passed:" -ForegroundColor Green
     Write-Host "  Status: $($health.status)" -ForegroundColor Gray
     Write-Host "  Version: $($health.version)" -ForegroundColor Gray
@@ -79,7 +79,7 @@ try {
         password = "Admin123!"
     }
     
-    $login = Invoke-RestMethod -Uri "http://localhost:8000/v1/auth/login" `
+    $login = Invoke-RestMethod -Uri "http://localhost:8001/v1/auth/login" `
         -Method Post `
         -ContentType "application/x-www-form-urlencoded" `
         -Body $loginBody `
@@ -105,7 +105,7 @@ try {
         Authorization = "Bearer $global:token"
     }
     
-    $datasets = Invoke-RestMethod -Uri "http://localhost:8000/v1/datasets" `
+    $datasets = Invoke-RestMethod -Uri "http://localhost:8001/v1/datasets" `
         -Headers $headers `
         -TimeoutSec 5
     
@@ -122,7 +122,7 @@ Write-Host "Backend Test Complete!" -ForegroundColor Cyan
 Write-Host ("=" * 60) -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. View API docs: http://localhost:8000/docs" -ForegroundColor White
+Write-Host "  1. View API docs: http://localhost:8001/docs" -ForegroundColor White
 Write-Host "  2. View MinIO console: http://localhost:9001 (minioadmin/minioadmin)" -ForegroundColor White
 Write-Host "  3. Connect to PostgreSQL: localhost:5432 (aureus/dev_password_123)" -ForegroundColor White
 Write-Host ""

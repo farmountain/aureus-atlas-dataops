@@ -21,13 +21,13 @@ docker-compose -f docker-compose.backend.yml logs -f
 
 ## Step 2: Test API
 
-Open browser: http://localhost:8000/docs
+Open browser: http://localhost:8001/docs
 
 ### Test Login
 
 ```powershell
 # Login with default admin user
-curl -X POST "http://localhost:8000/v1/auth/login" `
+curl -X POST "http://localhost:8001/v1/auth/login" `
   -H "Content-Type: application/x-www-form-urlencoded" `
   -d "username=admin@aureus-platform.com&password=Admin123!"
 ```
@@ -54,7 +54,7 @@ Expected response:
 $token = "your-access-token-here"
 
 # Submit a query
-curl -X POST "http://localhost:8000/v1/query/ask" `
+curl -X POST "http://localhost:8001/v1/query/ask" `
   -H "Authorization: Bearer $token" `
   -H "Content-Type: application/json" `
   -d '{"question":"Show me high-risk loans"}'
@@ -63,7 +63,7 @@ curl -X POST "http://localhost:8000/v1/query/ask" `
 ### Test Datasets Endpoint
 
 ```powershell
-curl -X GET "http://localhost:8000/v1/datasets" `
+curl -X GET "http://localhost:8001/v1/datasets" `
   -H "Authorization: Bearer $token"
 ```
 
@@ -71,7 +71,7 @@ curl -X GET "http://localhost:8000/v1/datasets" `
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **API Docs** | http://localhost:8000/docs | N/A |
+| **API Docs** | http://localhost:8001/docs | N/A |
 | **MinIO Console** | http://localhost:9001 | minioadmin / minioadmin |
 | **PostgreSQL** | localhost:5432 | aureus / dev_password_123 |
 | **Redis** | localhost:6379 | No password |

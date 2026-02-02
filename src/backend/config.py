@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     S3_REGION: str = "us-east-1"
     
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
     
     # Rate Limiting
     RATE_LIMIT_QUERIES_PER_MINUTE: int = 10
