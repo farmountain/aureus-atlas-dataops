@@ -2,7 +2,7 @@
 Query execution API endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db
@@ -11,12 +11,15 @@ from security.auth import get_current_user
 from services.query_execution import QueryExecutionService
 from utils.logging import logger
 from utils.errors import QueryExecutionError
+from middleware import query_rate_limit
 
 router = APIRouter()
 
 
 @router.post("/execute", response_model=QueryResponse)
+@query_rate_limit()
 async def execute_query(
+    http_request: Request,
     request: QueryRequest,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)

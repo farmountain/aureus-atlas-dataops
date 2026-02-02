@@ -6,6 +6,7 @@ Main application entry point
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -14,6 +15,8 @@ from config import settings
 from api import auth, query, dataset, audit
 from db.session import engine, Base
 from utils.logging import setup_logging, logger
+from middleware import limiter, rate_limit_exceeded_handler
+from services import observability
 
 # Setup logging
 setup_logging()
@@ -45,6 +48,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
 # CORS middleware
 cors_origins = settings.CORS_ORIGINS.split(',') if isinstance(settings.CORS_ORIGINS, str) else settings.CORS_ORIGINS
 app.add_middleware(
@@ -59,7 +66,7 @@ app.add_middleware(
 # Request ID middleware
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
-    """Add unique request ID to all requests"""
+    """Add unique request ID to all requests and track metrics"""
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     
@@ -71,6 +78,17 @@ async def add_request_id(request: Request, call_next):
     
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time"] = str(process_time)
+    
+    # Track request metrics
+    user = getattr(request.state, 'user', None)
+    user_id = str(user.id) if user else None
+    observability.track_request(
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        duration=process_time,
+        user_id=user_id
+    )
     
     logger.info(
         f"Request processed: {request.method} {request.url.path} - "
@@ -112,6 +130,13 @@ async def health_check():
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT
     }
+
+
+# Metrics endpoint
+@app.get("/metrics", tags=["System"])
+async def get_metrics():
+    """Get system metrics"""
+    return observability.get_metrics()
 
 
 # Root endpoint

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from utils.logging import logger
 from utils.errors import QueryExecutionError
+from .observability import observability
 
 
 class QueryExecutionService:
@@ -80,6 +81,16 @@ class QueryExecutionService:
                 f"{len(data)} rows in {execution_time:.3f}s"
             )
             
+            # Track query execution metrics
+            observability.track_query_execution(
+                query_id=execution_id,
+                dataset_id=dataset_id,
+                user_id=user_id,
+                execution_time=execution_time,
+                row_count=len(data),
+                success=True
+            )
+            
             return {
                 "execution_id": execution_id,
                 "sql": sql,
@@ -96,6 +107,27 @@ class QueryExecutionService:
             execution_time = (end_time - start_time).total_seconds()
             
             logger.error(f"Query execution failed: {str(e)}")
+            
+            # Track failed query
+            observability.track_query_execution(
+                query_id=execution_id,
+                dataset_id=dataset_id,
+                user_id=user_id,
+                execution_time=execution_time,
+                row_count=0,
+                success=False,
+                error=str(e)
+            )
+            
+            observability.track_error(
+                error_type="QueryExecutionError",
+                error_message=str(e),
+                context={
+                    "query_id": execution_id,
+                    "dataset_id": dataset_id,
+                    "user_id": user_id
+                }
+            )
             
             # Generate error evidence
             evidence = self._generate_evidence(

@@ -2,7 +2,7 @@
 Authentication API endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta
@@ -17,6 +17,8 @@ from security.auth import (
 )
 from config import settings
 from utils.logging import logger
+from middleware import auth_rate_limit
+from services import observability
 
 router = APIRouter()
 
@@ -24,7 +26,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
 
 
 @router.post("/login", response_model=Token)
+@auth_rate_limit()
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
@@ -39,6 +43,7 @@ async def login(
     
     if not user:
         logger.warning("Login failed", email=form_data.username)
+        observability.track_authentication(form_data.username, False, "Invalid credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -47,6 +52,7 @@ async def login(
     
     if not user.is_active:
         logger.warning("Inactive user login attempt", email=form_data.username)
+        observability.track_authentication(form_data.username, False, "Account disabled")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is disabled"
@@ -66,6 +72,7 @@ async def login(
     )
     
     logger.info("Login successful", user_id=str(user.id), email=user.email)
+    observability.track_authentication(user.email, True)
     
     return {
         "access_token": access_token,
