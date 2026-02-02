@@ -31,7 +31,7 @@ Every action produces verifiable evidence: policy checks, dataset lineage, gener
 ### Prompt Injection Defense (Design Coverage)
 The frontend includes a reusable prompt injection defense module at
 [`src/lib/prompt-injection-defense.ts`](src/lib/prompt-injection-defense.ts) that provides
-validation and sanitization helpers intended to be called before and after LLM usage. The
+validation and sanitization helpers called before and after LLM usage. The
 coverage scope includes:
 
 - **User input validation**: Detects prompt-injection patterns, suspicious SQL keywords, tool
@@ -43,10 +43,15 @@ coverage scope includes:
 - **LLM output validation**: Flags empty, overlong, or schema-invalid responses and potential
   code-execution markers.
 
-**Invocation intent**: These helpers are designed to be invoked by query/config flows immediately
-before sending prompts to LLMs (e.g., `validateUserInput`, `enforceRetrievalGrounding`) and after
-receiving responses (e.g., `validateGeneratedSQL`, `validateLLMOutput`). **Current limitation**:
-the module is present and tested but is not yet wired into the live LLM call paths in the UI.
+**✅ INTEGRATED (January 31, 2026)**: These helpers are now actively integrated into all LLM call 
+paths:
+- `validateUserInput()` - Called before all user inputs to LLM (query-service, llmService, config-copilot)
+- `enforceRetrievalGrounding()` - Validates dataset access in query execution
+- `validateGeneratedSQL()` - Validates all LLM-generated SQL before execution
+- `validateLLMOutput()` - Checks all LLM responses for security issues
+
+All validations automatically reject CRITICAL and HIGH risk inputs, with detailed error messages
+logged for security monitoring.
 
 ### Banking-Grade Governance
 - PII auto-detection and masking

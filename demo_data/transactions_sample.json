@@ -1,0 +1,28 @@
+{
+  "dataset": "customer_transactions",
+  "description": "Sample customer transaction data",
+  "rows": [
+    {
+      "transaction_id": "TXN-20240131-001",
+      "timestamp": "2024-01-31T10:30:00Z",
+      "customer_id": "CUST-12345",
+      "account_number": "****6789",
+      "transaction_type": "Purchase",
+      "amount": 450.00,
+      "merchant": "Amazon.com",
+      "category": "Retail",
+      "channel": "Online"
+    },
+    {
+      "transaction_id": "TXN-20240131-002",
+      "timestamp": "2024-01-31T11:15:00Z",
+      "customer_id": "CUST-12346",
+      "account_number": "****1234",
+      "transaction_type": "ATM Withdrawal",
+      "amount": 200.00,
+      "merchant": "Chase ATM",
+      "category": "Cash",
+      "channel": "ATM"
+    }
+  ]
+}

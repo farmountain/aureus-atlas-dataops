@@ -173,3 +173,95 @@ export function applyPiiMasking(
     },
   };
 }
+
+/**
+ * Automatically enforce PII masking based on user role and dataset PII level
+ * This ensures PII is masked unless user has explicit approval
+ */
+export function autoEnforcePiiMasking(
+  results: Array<Record<string, unknown>>,
+  datasets: Dataset[],
+  userRole: string,
+  hasExplicitPiiApproval: boolean = false
+): MaskingResult {
+  // Admin and users with explicit approval see unmasked data
+  if (userRole === 'admin' || hasExplicitPiiApproval) {
+    return { maskedResults: results, maskedFields: [] };
+  }
+
+  const maxPiiLevel = datasets.reduce((max, ds) => {
+    if (ds.piiLevel === 'high') return 'high';
+    if (ds.piiLevel === 'low' && max !== 'high') return 'low';
+    return max;
+  }, 'none' as string);
+
+  // No PII, return unmasked
+  if (maxPiiLevel === 'none') {
+    return { maskedResults: results, maskedFields: [] };
+  }
+
+  // Get masking strategy based on PII level and user role
+  const strategy = getMaskingStrategyForRole(userRole, maxPiiLevel);
+
+  const piiColumns = new Map<string, { name: string }>();
+  datasets.forEach(dataset => {
+    dataset.schema
+      .filter(column => column.pii)
+      .forEach(column => {
+        piiColumns.set(normalizeKey(column.name), { name: column.name });
+      });
+  });
+
+  if (piiColumns.size === 0) {
+    return { maskedResults: results, maskedFields: [] };
+  }
+
+  const maskedFields: MaskedField[] = [];
+  const maskedResults = results.map(row => {
+    const nextRow: Record<string, unknown> = { ...row };
+    Object.keys(nextRow).forEach(key => {
+      const piiColumn = piiColumns.get(normalizeKey(key));
+      if (!piiColumn) return;
+
+      nextRow[key] = maskValue(nextRow[key], strategy);
+      if (!maskedFields.find(f => f.field === key)) {
+        maskedFields.push({
+          field: key,
+          strategy,
+          reason: `Automatic PII masking for ${userRole} role accessing ${maxPiiLevel} PII data`,
+          policyId: 'auto-pii-masking',
+          policyName: 'Automatic PII Protection',
+        });
+      }
+    });
+    return nextRow;
+  });
+
+  return {
+    maskedResults,
+    maskedFields,
+    policySummary: {
+      policyId: 'auto-pii-masking',
+      policyName: 'Automatic PII Protection',
+      reason: `PII automatically masked for ${userRole} role (${maxPiiLevel} PII level)`,
+    },
+  };
+}
+
+/**
+ * Determine masking strategy based on user role and PII level
+ */
+function getMaskingStrategyForRole(userRole: string, piiLevel: string): MaskingStrategy {
+  // Approvers get partial masking for high PII
+  if (userRole === 'approver') {
+    return piiLevel === 'high' ? 'PARTIAL' : 'PARTIAL';
+  }
+
+  // Analysts get partial for low PII, redacted for high PII
+  if (userRole === 'analyst') {
+    return piiLevel === 'high' ? 'REDACT' : 'PARTIAL';
+  }
+
+  // Viewers get full redaction
+  return 'REDACT';
+}

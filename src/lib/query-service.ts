@@ -3,8 +3,9 @@ import { AureusGuard } from './aureus-guard';
 import type { ActionContext } from './aureus-types';
 import { PostgresSandbox } from './postgres-sandbox';
 import { queryRateLimiter } from './rate-limiter';
-import { applyPiiMasking, type MaskedField, type MaskingPolicySummary } from './pii-masking';
+import { applyPiiMasking, autoEnforcePiiMasking, type MaskedField, type MaskingPolicySummary } from './pii-masking';
 import { ApprovalService } from './approval-service';
+import { validateUserInput, validateGeneratedSQL, enforceRetrievalGrounding } from './prompt-injection-defense';
 
 export interface QueryIntent {
   question: string;
@@ -90,6 +91,15 @@ export class QueryService {
   }
 
   async ask(request: QueryAskRequest): Promise<QueryAskResponse> {
+    // Validate user input for prompt injection
+    const validation = validateUserInput(request.question, 'query');
+    if (!validation.isValid) {
+      throw new Error(`Query validation failed: ${validation.issues.join(', ')}`);
+    }
+    if (validation.riskLevel === 'CRITICAL') {
+      throw new Error(`Query rejected due to CRITICAL security risk: ${validation.issues.join(', ')}`);
+    }
+    
     const rateLimitResult = await queryRateLimiter.checkLimit(request.actor);
     
     if (!rateLimitResult.allowed) {
@@ -102,6 +112,16 @@ export class QueryService {
     const intent = await this.parseIntent(request.question, request.domain);
 
     const requiredDatasets = this.identifyRequiredDatasets(intent, request.domain);
+
+    // Enforce retrieval grounding - validate datasets are allowed
+    const groundingValidation = enforceRetrievalGrounding(
+      request.question,
+      requiredDatasets.map(ds => ds.id),
+      requiredDatasets.map(ds => ds.domain)
+    );
+    if (!groundingValidation.isValid) {
+      throw new Error(`Retrieval grounding check failed: ${groundingValidation.issues.join(', ')}`);
+    }
 
     const context: ActionContext = {
       actionType: 'query_execute',
@@ -147,6 +167,18 @@ export class QueryService {
     }
 
     const sql = this.generateSQL(intent, requiredDatasets);
+
+    // Validate generated SQL for security issues
+    const sqlValidation = validateGeneratedSQL(
+      sql,
+      requiredDatasets.map(ds => ds.name)
+    );
+    if (!sqlValidation.isValid) {
+      throw new Error(`Generated SQL validation failed: ${sqlValidation.issues.join(', ')}`);
+    }
+    if (sqlValidation.riskLevel === 'CRITICAL') {
+      throw new Error(`Generated SQL rejected due to CRITICAL security risk: ${sqlValidation.issues.join(', ')}`);
+    }
 
     this.validateSQL(sql);
 
@@ -194,10 +226,37 @@ export class QueryService {
     }
 
     const results = await this.sandbox.execute(sql, requiredDatasets);
-    const maskingOutcome = applyPiiMasking(results, requiredDatasets, policyDecisions);
+    
+    // Check if user has explicit PII approval
+    const hasExplicitPiiApproval = policyChecks.some(
+      check => check.policyId.includes('pii') && check.result === 'allow'
+    );
+    
+    // Apply automatic PII masking based on role (unless explicitly approved)
+    const maskingOutcome = autoEnforcePiiMasking(
+      results,
+      requiredDatasets,
+      request.role,
+      hasExplicitPiiApproval
+    );
+    
+    // Also apply policy-based masking if available
+    const policyMaskingOutcome = applyPiiMasking(
+      maskingOutcome.maskedResults,
+      requiredDatasets,
+      policyDecisions
+    );
+    
+    // Merge masking results
+    const finalMaskedFields = [
+      ...maskingOutcome.maskedFields,
+      ...policyMaskingOutcome.maskedFields.filter(
+        f => !maskingOutcome.maskedFields.find(mf => mf.field === f.field)
+      )
+    ];
 
     const resultMetadata = this.calculateResultMetadata(
-      maskingOutcome.maskedResults,
+      policyMaskingOutcome.maskedResults,
       Date.now() - new Date(timestamp).getTime()
     );
 
@@ -218,9 +277,9 @@ export class QueryService {
       policyChecks,
       citations,
       freshnessChecks,
-      results: maskingOutcome.maskedResults,
-      maskedFields: maskingOutcome.maskedFields,
-      maskingPolicy: maskingOutcome.policySummary,
+      results: policyMaskingOutcome.maskedResults,
+      maskedFields: finalMaskedFields,
+      maskingPolicy: policyMaskingOutcome.policySummary || maskingOutcome.policySummary,
       resultMetadata,
       lineageId,
       timestamp,

@@ -2,8 +2,18 @@ import type { DataContract, PipelineSpec, Dataset, QueryResult, PolicyCheck } fr
 import { SAMPLE_DATASETS } from './mockData';
 import { observabilityService } from './observability';
 import { wrapWithBudgetEnforcement } from './budget-enforcer';
+import { validateUserInput, validateLLMOutput } from './prompt-injection-defense';
 
 export async function generateDataContract(description: string): Promise<DataContract> {
+  // Validate user input for prompt injection
+  const validation = validateUserInput(description, 'config');
+  if (!validation.isValid) {
+    throw new Error(`Input validation failed: ${validation.issues.join(', ')}`);
+  }
+  if (validation.riskLevel === 'CRITICAL' || validation.riskLevel === 'HIGH') {
+    throw new Error(`Input rejected due to ${validation.riskLevel} risk: ${validation.issues.join(', ')}`);
+  }
+
   return wrapWithBudgetEnforcement(
     async () => {
       const prompt = `You are a data governance expert at a bank. A user wants to onboard a new dataset.
@@ -36,6 +46,13 @@ Rules:
 - Owner should be a relevant team name`;
 
       const response = await window.spark.llm(prompt, 'gpt-4o', true);
+      
+      // Validate LLM output
+      const outputValidation = validateLLMOutput(response, { name: 'string', domain: 'string' });
+      if (!outputValidation.isValid) {
+        throw new Error(`LLM output validation failed: ${outputValidation.issues.join(', ')}`);
+      }
+      
       const contract = JSON.parse(response) as DataContract;
       
       return contract;
@@ -49,6 +66,15 @@ export async function generatePipelineSpec(
   description: string,
   availableDatasets: Dataset[]
 ): Promise<PipelineSpec> {
+  // Validate user input for prompt injection
+  const validation = validateUserInput(description, 'config');
+  if (!validation.isValid) {
+    throw new Error(`Input validation failed: ${validation.issues.join(', ')}`);
+  }
+  if (validation.riskLevel === 'CRITICAL' || validation.riskLevel === 'HIGH') {
+    throw new Error(`Input rejected due to ${validation.riskLevel} risk: ${validation.issues.join(', ')}`);
+  }
+
   return wrapWithBudgetEnforcement(
     async () => {
       const datasetsContext = availableDatasets.map(ds => ({
@@ -99,6 +125,13 @@ Rules:
 - Target dataset name should reflect what the pipeline produces`;
 
       const response = await window.spark.llm(prompt, 'gpt-4o', true);
+      
+      // Validate LLM output
+      const outputValidation = validateLLMOutput(response, { name: 'string', sql: 'string' });
+      if (!outputValidation.isValid) {
+        throw new Error(`LLM output validation failed: ${outputValidation.issues.join(', ')}`);
+      }
+      
       const spec = JSON.parse(response) as PipelineSpec;
       
       return spec;
@@ -112,6 +145,15 @@ export async function generateSQLFromQuestion(
   question: string,
   availableDatasets: Dataset[]
 ): Promise<{ sql: string; datasets: Dataset[]; intent: Record<string, unknown> }> {
+  // Validate user input for prompt injection
+  const validation = validateUserInput(question, 'query');
+  if (!validation.isValid) {
+    throw new Error(`Question validation failed: ${validation.issues.join(', ')}`);
+  }
+  if (validation.riskLevel === 'CRITICAL') {
+    throw new Error(`Question rejected due to CRITICAL security risk: ${validation.issues.join(', ')}`);
+  }
+
   return wrapWithBudgetEnforcement(
     async () => {
       const datasetsContext = availableDatasets.map(ds => ({
@@ -158,11 +200,30 @@ Rules:
 - Include appropriate WHERE, GROUP BY, ORDER BY clauses`;
 
       const response = await window.spark.llm(prompt, 'gpt-4o', true);
+      
+      // Validate LLM output
+      const outputValidation = validateLLMOutput(response, { sql: 'string', datasets: 'array' });
+      if (!outputValidation.isValid) {
+        throw new Error(`LLM output validation failed: ${outputValidation.issues.join(', ')}`);
+      }
+      
       const result = JSON.parse(response) as {
         intent: Record<string, unknown>;
         datasets: string[];
         sql: string;
       };
+
+      // Validate generated SQL
+      const sqlValidation = validateGeneratedSQL(
+        result.sql,
+        result.datasets
+      );
+      if (!sqlValidation.isValid) {
+        throw new Error(`Generated SQL validation failed: ${sqlValidation.issues.join(', ')}`);
+      }
+      if (sqlValidation.riskLevel === 'CRITICAL') {
+        throw new Error(`Generated SQL rejected due to CRITICAL security risk: ${sqlValidation.issues.join(', ')}`);
+      }
 
       const matchedDatasets = availableDatasets.filter(ds => 
         result.datasets.includes(ds.name)

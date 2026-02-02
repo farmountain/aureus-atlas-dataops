@@ -21,6 +21,7 @@ import { EvidenceKeys, getEvidenceBundle, storeEvidenceBundle } from './evidence
 import { AureusGuard } from './aureus-guard';
 import { PolicyEvaluator } from './policy-evaluator';
 import { ApprovalService } from './approval-service';
+import { validateUserInput, validateLLMOutput } from './prompt-injection-defense';
 
 export interface ConfigDescribeRequest {
   nlInput: string;
@@ -74,6 +75,13 @@ export interface ConfigEvidence {
 
 export class ConfigCopilotService {
   private static async generateDatasetContract(nlInput: string, context?: Record<string, unknown>): Promise<DatasetContractSpec | null> {
+    // Validate user input for prompt injection
+    const validation = validateUserInput(nlInput, 'config');
+    if (!validation.isValid || validation.riskLevel === 'CRITICAL' || validation.riskLevel === 'HIGH') {
+      console.error(`[ConfigCopilot] Input validation failed:`, validation.issues);
+      return null;
+    }
+
     const prompt = spark.llmPrompt`You are a data contract specification expert for banking systems.
 
 Given the following natural language description, generate a complete dataset contract specification.
@@ -129,6 +137,14 @@ Return ONLY a valid JSON object with a single "datasetContract" property contain
 
     try {
       const response = await spark.llm(prompt, 'gpt-4o', true);
+      
+      // Validate LLM output
+      const outputValidation = validateLLMOutput(response, { datasetContract: 'object' });
+      if (!outputValidation.isValid) {
+        console.error(`[ConfigCopilot] LLM output validation failed:`, outputValidation.issues);
+        return null;
+      }
+      
       const parsed = JSON.parse(response);
       return parsed.datasetContract || null;
     } catch (error) {
@@ -138,6 +154,13 @@ Return ONLY a valid JSON object with a single "datasetContract" property contain
   }
 
   private static async generateDQRules(nlInput: string, datasetContract?: DatasetContractSpec): Promise<DQRuleSpec[]> {
+    // Validate user input for prompt injection
+    const validation = validateUserInput(nlInput, 'config');
+    if (!validation.isValid || validation.riskLevel === 'CRITICAL' || validation.riskLevel === 'HIGH') {
+      console.error(`[ConfigCopilot] DQ Rules input validation failed:`, validation.issues);
+      return [];
+    }
+
     const prompt = spark.llmPrompt`You are a data quality rule specification expert for banking systems.
 
 Given the following natural language description and dataset contract, generate comprehensive data quality rules.
@@ -183,6 +206,14 @@ Return ONLY a valid JSON object with a single "dqRules" property containing an a
 
     try {
       const response = await spark.llm(prompt, 'gpt-4o', true);
+      
+      // Validate LLM output
+      const outputValidation = validateLLMOutput(response, { dqRules: 'array' });
+      if (!outputValidation.isValid) {
+        console.error(`[ConfigCopilot] DQ Rules output validation failed:`, outputValidation.issues);
+        return [];
+      }
+      
       const parsed = JSON.parse(response);
       return parsed.dqRules || [];
     } catch (error) {
@@ -192,6 +223,13 @@ Return ONLY a valid JSON object with a single "dqRules" property containing an a
   }
 
   private static async generatePolicies(nlInput: string, datasetContract?: DatasetContractSpec): Promise<PolicySpec[]> {
+    // Validate user input for prompt injection
+    const validation = validateUserInput(nlInput, 'config');
+    if (!validation.isValid || validation.riskLevel === 'CRITICAL' || validation.riskLevel === 'HIGH') {
+      console.error(`[ConfigCopilot] Policies input validation failed:`, validation.issues);
+      return [];
+    }
+
     const prompt = spark.llmPrompt`You are a data governance policy specification expert for banking systems.
 
 Given the following natural language description and dataset contract, generate appropriate governance policies.
@@ -243,6 +281,14 @@ Return ONLY a valid JSON object with a single "policies" property containing an 
 
     try {
       const response = await spark.llm(prompt, 'gpt-4o', true);
+      
+      // Validate LLM output
+      const outputValidation = validateLLMOutput(response, { policies: 'array' });
+      if (!outputValidation.isValid) {
+        console.error(`[ConfigCopilot] Policies output validation failed:`, outputValidation.issues);
+        return [];
+      }
+      
       const parsed = JSON.parse(response);
       return parsed.policies || [];
     } catch (error) {
@@ -252,6 +298,13 @@ Return ONLY a valid JSON object with a single "policies" property containing an 
   }
 
   private static async generateSLAs(nlInput: string, datasetContract?: DatasetContractSpec): Promise<SLASpec[]> {
+    // Validate user input for prompt injection
+    const validation = validateUserInput(nlInput, 'config');
+    if (!validation.isValid || validation.riskLevel === 'CRITICAL' || validation.riskLevel === 'HIGH') {
+      console.error(`[ConfigCopilot] SLAs input validation failed:`, validation.issues);
+      return [];
+    }
+
     const prompt = spark.llmPrompt`You are a service level agreement (SLA) specification expert for banking data systems.
 
 Given the following natural language description and dataset contract, generate appropriate SLA specifications.
@@ -313,6 +366,14 @@ Return ONLY a valid JSON object with a single "slas" property containing an arra
 
     try {
       const response = await spark.llm(prompt, 'gpt-4o', true);
+      
+      // Validate LLM output
+      const outputValidation = validateLLMOutput(response, { slas: 'array' });
+      if (!outputValidation.isValid) {
+        console.error(`[ConfigCopilot] SLAs output validation failed:`, outputValidation.issues);
+        return [];
+      }
+      
       const parsed = JSON.parse(response);
       return parsed.slas || [];
     } catch (error) {

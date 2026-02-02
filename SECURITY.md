@@ -49,10 +49,31 @@ provide layered validation around LLM interactions and covers:
 - **LLM output validation** to detect empty/oversized outputs, schema mismatches, and potential
   code-execution markers.
 
-**Invocation intent**: These helpers are meant to be called before LLM prompts are issued and after
-LLM outputs are received (for example, in query/config workflows). **Current limitation**: the
-module exists and is unit-tested but is not yet wired into the live LLM call stack, so the checks
-are advisory until integrated into runtime request/response handling.
+**✅ STATUS (January 31, 2026)**: The module is now fully integrated into the runtime request/response 
+handling. All LLM calls in `query-service.ts`, `llmService.ts`, and `config-copilot.ts` now include:
+- Pre-validation: `validateUserInput()` called before LLM prompts
+- Post-validation: `validateLLMOutput()` and `validateGeneratedSQL()` called after LLM responses
+- Automatic rejection: CRITICAL and HIGH risk inputs are automatically blocked
+- Audit trail: All validation failures are logged with risk levels
+
+### Automatic PII Masking
+
+**✅ IMPLEMENTED (January 31, 2026)**: The system now automatically masks PII in query results based 
+on user role and dataset PII level:
+
+- **Admin users**: See unmasked data
+- **Users with explicit approval**: See unmasked data (approval granted via policy)
+- **Approver role**: Partial masking for high PII, partial for low PII
+- **Analyst role**: Redacted for high PII, partial for low PII
+- **Viewer role**: Full redaction for all PII
+
+Masking strategies:
+- `REDACT`: Replaced with `[REDACTED]` placeholder
+- `PARTIAL`: Show last 4 characters, mask rest (e.g., `••••••1234`)
+- `FULL`: Complete masking with bullet characters
+- `HASH`: Replace with deterministic hash
+
+All masking decisions are logged in query evidence packs with field names, strategies, and reasons.
 
 ## Secrets Management for Production
 
